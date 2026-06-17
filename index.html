@@ -3403,7 +3403,7 @@ function splitSentences(text) {
   const parts = cleaned.split(/(?<=[.!?])\s+(?=[A-Z"])|\n+/);
   return parts
     .map(s => s.replace(/<DOT>/g, '.').trim())
-    .filter(s => s.length > 15 && s.length < 400);
+    .filter(s => s.length >= 10 && s.length < 400);
 }
 
 function scoreSentenceVisualness(sentence) {
@@ -3490,7 +3490,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'flying',
     label: 'Flying Dream',
     icon: 'feather',
-    detectRegex: /\\b(flew|flying|fly|flight|soar|soaring|airborne|wings|levitate|hover|float)\\b/i,
+    detectRegex: /\b(flew|flying|fly|flight|soar|soaring|airborne|wings|levitate|hover|float)\b/i,
     detectEmotions: ['Joy', 'Excitement', 'Awe', 'Wonder'],
     promptAdd: 'subject suspended in mid-air, weightless flight, expansive aerial vista, sense of freedom and altitude',
     suggestedStyle: 'cosmic_vision',
@@ -3500,7 +3500,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'chase',
     label: 'Chase Dream',
     icon: 'footprints',
-    detectRegex: /\\b(chase|chased|pursu|running from|fleeing|escaping|after me|hunting)\\b/i,
+    detectRegex: /\b(chase|chased|pursu|running from|fleeing|escaping|after me|hunting)\b/i,
     detectEmotions: ['Fear', 'Anxiety'],
     promptAdd: 'dynamic motion, sense of pursuit and urgency, dramatic foreshortening, motion blur, tense atmosphere',
     suggestedStyle: 'surreal_dali',
@@ -3510,7 +3510,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'water',
     label: 'Water Dream',
     icon: 'waves',
-    detectRegex: /\\b(ocean|sea|river|lake|swim|swimming|water|underwater|drowning|wave|tide|submerged)\\b/i,
+    detectRegex: /\b(ocean|sea|river|lake|swim|swimming|water|underwater|drowning|wave|tide|submerged)\b/i,
     detectEmotions: ['Peace', 'Fear', 'Wonder'],
     promptAdd: 'liquid environment, refracted light through water, submerged perspective, reflective surface, fluid dynamics',
     suggestedStyle: 'oil_dreamscape',
@@ -3520,7 +3520,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'lost_place',
     label: 'Forgotten Place',
     icon: 'building-2',
-    detectRegex: /\\b(abandoned|empty|forgotten|old school|childhood home|ruins|derelict|deserted|silent)\\b/i,
+    detectRegex: /\b(abandoned|empty|forgotten|old school|childhood home|ruins|derelict|deserted|silent)\b/i,
     detectEmotions: ['Nostalgia', 'Sadness', 'Confusion'],
     promptAdd: 'decaying architecture, dust-filled light beams, peeling paint, forgotten objects, melancholy atmosphere',
     suggestedStyle: 'oil_dreamscape',
@@ -3530,7 +3530,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'visitation',
     label: 'Visitation Dream',
     icon: 'ghost',
-    detectRegex: /\\b(dead|deceased|passed away|grandfather|grandmother|father|mother|visit|spirit|ghost)\\b/i,
+    detectRegex: /\b(dead|deceased|passed away|grandfather|grandmother|father|mother|visit|spirit|ghost)\b/i,
     detectEmotions: ['Sadness', 'Peace', 'Love', 'Nostalgia'],
     promptAdd: 'ethereal luminous figure, soft radiant glow, gentle presence, sacred atmosphere, golden halo of light',
     suggestedStyle: 'oil_dreamscape',
@@ -3540,7 +3540,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'test',
     label: 'Performance Dream',
     icon: 'clipboard-check',
-    detectRegex: /\\b(test|exam|school|classroom|teacher|unprepared|fail|grade|stage|audience|perform)\\b/i,
+    detectRegex: /\b(test|exam|school|classroom|teacher|unprepared|fail|grade|stage|audience|perform)\b/i,
     detectEmotions: ['Anxiety', 'Fear'],
     promptAdd: 'institutional setting, sense of being judged, harsh overhead lighting, exposed vulnerable subject',
     suggestedStyle: 'surreal_dali',
@@ -3550,7 +3550,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'falling',
     label: 'Falling Dream',
     icon: 'arrow-down',
-    detectRegex: /\\b(fell|falling|plummet|drop|tumble|vertigo|downward)\\b/i,
+    detectRegex: /\b(fell|falling|plummet|drop|tumble|vertigo|downward)\b/i,
     detectEmotions: ['Fear', 'Anxiety'],
     promptAdd: 'vertical composition, sense of vertiginous descent, motion lines, blurred ground rushing upward',
     suggestedStyle: 'surreal_dali',
@@ -3560,7 +3560,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'transformation',
     label: 'Transformation Dream',
     icon: 'git-merge',
-    detectRegex: /\\b(transform|shapeshift|changed into|became|morph|turn into|metamorphosis)\\b/i,
+    detectRegex: /\b(transform|shapeshift|changed into|became|morph|turn into|metamorphosis)\b/i,
     detectEmotions: ['Wonder', 'Confusion', 'Fear'],
     promptAdd: 'mid-transformation moment, morphing forms, dissolving boundaries between states, fluid identity',
     suggestedStyle: 'surreal_dali',
@@ -3570,7 +3570,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'apocalypse',
     label: 'Apocalypse Dream',
     icon: 'alert-octagon',
-    detectRegex: /\\b(end of the world|apocalypse|disaster|explosion|destruction|doom|catastroph|collaps)\\b/i,
+    detectRegex: /\b(end of the world|apocalypse|disaster|explosion|destruction|doom|catastroph|collaps)\b/i,
     detectEmotions: ['Fear', 'Awe', 'Anxiety'],
     promptAdd: 'cataclysmic scale, monumental destruction, dramatic lighting, smoke and fire, epic cinematic vista',
     suggestedStyle: 'cyberpunk_neon',
@@ -3580,7 +3580,7 @@ const DREAM_TYPE_TEMPLATES = [
     id: 'mirror_portal',
     label: 'Mirror Portal',
     icon: 'frame',
-    detectRegex: /\\b(mirror|reflection|through the glass|portal|doorway|step through|other side)\\b/i,
+    detectRegex: /\b(mirror|reflection|through the glass|portal|doorway|step through|other side)\b/i,
     detectEmotions: ['Wonder', 'Curiosity', 'Confusion'],
     promptAdd: 'reflective surface as threshold, dual worlds visible, shimmering portal edge, liminal space',
     suggestedStyle: 'cosmic_vision',
@@ -3913,13 +3913,10 @@ function buildImagePrompt(dream, options = {}) {
   const mood = getMoodModifier(dream.emotions);
   const timeOfDay = getTimeOfDay(dream.time);
   const palette = TIME_OF_NIGHT_PALETTE[timeOfDay];
-  const keywords = scenes && scenes.length
-    ? scenes[options.sceneIndex || 0].keywords
-    : extractVisualKeywords(dream.narrative);
 
   // Use smart scene extraction: pick most visual sentence
-  let scene;
   const scenes = extractDreamScenes(dream.narrative, 3);
+  let scene;
   if (scenes && scenes.length) {
     const sceneIdx = Math.min(options.sceneIndex || 0, scenes.length - 1);
     scene = scenes[sceneIdx].text;
@@ -3927,6 +3924,11 @@ function buildImagePrompt(dream, options = {}) {
     scene = (dream.narrative || '').slice(0, 180).trim();
   }
   if (scene.length > 220) scene = scene.slice(0, 220).replace(/\s+\S*$/, '') + '…';
+
+  // Pick keywords from the chosen scene (or fall back to full narrative)
+  const keywords = scenes && scenes.length
+    ? scenes[Math.min(options.sceneIndex || 0, scenes.length - 1)].keywords
+    : extractVisualKeywords(dream.narrative);
 
   // Style is determined by Stage 3 (ART_STYLES). If options.style is provided,
   // we'll look it up; otherwise default to 'watercolour_comic'.
