@@ -480,10 +480,12 @@ ul, ol { list-style: none; }
 }
 
 @media (max-width: 768px) {
-  .hero-grid { grid-template-columns: 1fr; text-align: center; }
-  .hero-visual { order: -1; }
-  .hero-time { font-size: 2.6rem; }
-  .hero-section { padding: 24px 20px; }
+  .hero-grid { grid-template-columns: 1fr; text-align: center; gap: 16px; }
+  .hero-visual { order: -1; margin: 0 auto; }
+  .hero-time { font-size: 2.4rem; }
+  .hero-section { padding: 20px 16px; }
+  .streak-pill { margin: 8px auto 0; }
+  .hero-greeting, .hero-moon-name { text-align: center; }
 }
 
 
@@ -588,14 +590,9 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   100% { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-/* Lucid star marker rotation */
+/* Lucid star marker — gentle pulse only (no rotation) */
 .lucid-star-marker {
   display: inline-block;
-  animation: lucidStarSpin 4s linear infinite, lucidPulse 2.5s ease-in-out infinite;
-}
-@keyframes lucidStarSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
 }
 
 /* Achievement modal — golden burst */
@@ -1225,7 +1222,13 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 
 
 /* ========== BANNER ASPECT RATIOS (v5) ========== */
-.dream-banner { object-fit: cover; width: 100%; display: block; border-radius: var(--radius-sm); }
+.dream-banner {
+  object-fit: cover; width: 100%; display: block;
+  border-radius: var(--radius); margin-bottom: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(159,234,232,0.15);
+  transition: transform var(--dur-base) var(--ease-spring-soft);
+}
+.dream-banner:hover { transform: scale(1.01); }
 /* Banner adapts to natural image aspect ratio, but constrained by max-height */
 .dream-banner-fallback {
   width: 100%; border-radius: var(--radius-sm);
@@ -1470,10 +1473,10 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .modal-header h2 { margin: 0; }
 
 /* ========== EMPTY STATES ========== */
-.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 56px 24px; text-align: center; }
-.empty-state svg { margin-bottom: 20px; opacity: 0.5; }
-.empty-state h3 { margin-bottom: 8px; }
-.empty-state p { color: var(--muted); max-width: 340px; margin-bottom: 24px; }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; text-align: center; }
+.empty-state svg { margin-bottom: 24px; opacity: 0.5; }
+.empty-state h3 { margin-bottom: 10px; font-size: 1.2rem; }
+.empty-state p { color: var(--muted); max-width: 360px; margin-bottom: 28px; line-height: 1.6; font-size: 0.92rem; }
 
 /* ========== TOAST ========== */
 .toast-container { position: fixed; top: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
@@ -1550,8 +1553,10 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   50% { opacity: 1; }
 }
 .lucid-star-marker {
-  color: var(--accent); font-size: 0.7rem; margin-left: 2px;
+  color: var(--gold-bright); font-size: 0.85rem; margin-left: 6px;
+  display: inline-block;
   animation: lucidPulse 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(245,217,122,0.5));
 }
 @keyframes lucidPulse {
   0%, 100% { opacity: 0.7; }
@@ -1563,10 +1568,10 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .dash-time { font-family: 'Lora', serif; font-size: 2.2rem; margin-bottom: 4px; letter-spacing: -0.01em; }
 .dash-quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 32px; }
 .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 32px; }
-.stat-card { position: relative; overflow: hidden; padding: 20px; }
-.stat-card .stat-value { font-family: 'Lora', serif; font-size: 1.9rem; color: var(--accent); line-height: 1.1; }
-.stat-card .stat-label { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
-.stat-card .stat-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); opacity: 0.12; }
+.stat-card { position: relative; overflow: hidden; padding: 22px 20px; }
+.stat-card .stat-value { font-family: 'Lora', serif; font-size: 2rem; color: var(--accent); line-height: 1.1; margin-bottom: 2px; }
+.stat-card .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.stat-card .stat-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); opacity: 0.1; }
 
 /* Moon + Streak Banner */
 .moon-streak-banner {
@@ -1614,7 +1619,7 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
 .dream-list { display: flex; flex-direction: column; gap: 10px; }
 .dream-entry-card {
-  display: flex; gap: 14px; padding: 14px 16px; cursor: pointer;
+  display: flex; gap: 16px; padding: 14px; cursor: pointer;
   border: 1px solid transparent; border-radius: var(--radius);
   background: linear-gradient(135deg, rgba(21,34,56,0.75) 0%, rgba(21,34,56,0.65) 100%);
   backdrop-filter: var(--blur-card); -webkit-backdrop-filter: var(--blur-card);
@@ -1638,17 +1643,55 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 }
 .dream-entry-card:hover::before { opacity: 1; }
 .dream-entry-card .dream-thumb {
-  width: 80px; height: 48px; flex-shrink: 0; border-radius: 8px; overflow: hidden;
+  width: 180px; height: 110px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
   background: linear-gradient(135deg, var(--surface), rgba(159,234,232,0.1));
   position: relative;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(159,234,232,0.15);
+  transition: transform var(--dur-base) var(--ease-spring-soft), box-shadow var(--dur-base) var(--ease-smooth);
+}
+.dream-entry-card:hover .dream-thumb {
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(159,234,232,0.2), inset 0 0 0 1px rgba(159,234,232,0.3);
 }
 .dream-entry-card .dream-thumb img {
   width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform var(--dur-slow) var(--ease-out-expo);
+}
+.dream-entry-card:hover .dream-thumb img {
+  transform: scale(1.08);
 }
 .dream-entry-card .dream-thumb .thumb-shimmer { width: 100%; height: 100%; }
+.dream-entry-card .dream-thumb .thumb-fallback {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--surface), rgba(159,234,232,0.15));
+}
+/* Lucid badge overlay on thumbnail */
+.dream-entry-card .dream-thumb .thumb-lucid-badge {
+  position: absolute; top: 6px; left: 6px;
+  background: linear-gradient(135deg, rgba(159,234,232,0.9), rgba(95,189,185,0.9));
+  color: #0D1B2A; font-size: 0.62rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+/* Date badge overlay on thumbnail */
+.dream-entry-card .dream-thumb .thumb-date-badge {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(13,27,42,0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  color: var(--accent-bright); font-size: 0.7rem; font-weight: 600;
+  padding: 3px 8px; border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid rgba(159,234,232,0.2);
+}
 .dream-entry-card .dream-body { flex: 1; min-width: 0; }
 .dream-entry-card .dream-title { font-family: 'Lora', serif; font-weight: 600; margin-bottom: 3px; font-size: 1.02rem; display: flex; align-items: center; gap: 6px; }
-.dream-entry-card .dream-preview { color: var(--muted); font-size: 0.84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dream-entry-card .dream-preview {
+  color: var(--muted); font-size: 0.85rem; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  margin-bottom: 4px;
+}
 .dream-entry-card .dream-bottom { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
 .dream-lucidity { display: flex; gap: 1px; }
 .dream-lucidity .l-star { color: var(--accent); font-size: 0.72rem; }
@@ -2031,6 +2074,14 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   .form-row { grid-template-columns: 1fr; }
   .moon-streak-banner { flex-direction: column; text-align: center; gap: 12px; }
   .achievement-card { padding: 32px 22px; }
+  /* Smaller thumbnails on mobile, but still prominent */
+  .dream-entry-card .dream-thumb { width: 120px; height: 80px; }
+  .dream-entry-card { padding: 10px; gap: 12px; }
+  .dream-entry-card .dream-title { font-size: 0.95rem; }
+  .dream-entry-card .dream-preview { font-size: 0.8rem; -webkit-line-clamp: 2; }
+  .hero-time { font-size: 2.4rem; }
+  .hero-section { padding: 20px 16px; }
+  .dream-detail-actions { justify-content: center; }
 }
 @media (min-width: 769px) and (max-width: 1024px) {
   .sidebar { width: 68px; }
@@ -4343,7 +4394,7 @@ function renderDashboard() {
       <div class="card stat-card" data-count="${lucidDreams}"><div class="stat-value">0</div><div class="stat-label">Lucid dreams</div><i data-lucide="eye" class="stat-icon" style="width:44px;height:44px;color:var(--accent);opacity:0.15;"></i></div>
       <div class="card stat-card" data-count="${avgLucidity}"><div class="stat-value">0</div><div class="stat-label">Avg lucidity</div><i data-lucide="star" class="stat-icon" style="width:44px;height:44px;color:var(--accent);opacity:0.15;"></i></div>
     </div>
-    ${totalDreams>0?`<h2 style="margin-bottom:14px;">Recent Dreams</h2><div class="dream-list">${dreamsCache.slice(-3).reverse().map(d=>renderDreamCard(d)).join('')}</div>`:`<div class="card empty-state"><svg width="72" height="72" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="30" stroke="var(--accent)" stroke-width="1.5" opacity="0.3"/><path d="M40 10 A30 30 0 1 1 40 70 A15 30 0 1 0 40 10Z" fill="var(--accent)" opacity="0.2"/></svg><h3>Begin your dream journey</h3><p>Log your first dream to start tracking patterns and building lucidity.</p><button class="btn btn-primary" onclick="openDreamForm()">Log your first dream</button></div>`}
+    ${totalDreams>0?`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><h2 style="margin:0;">Recent Dreams</h2><button class="btn btn-secondary btn-sm" onclick="navigate('journal')">View all <i data-lucide="arrow-right" style="width:12px;height:12px;"></i></button></div><div class="dream-list">${dreamsCache.slice(-3).reverse().map(d=>renderDreamCard(d)).join('')}</div>`:`<div class="card empty-state"><svg width="72" height="72" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="30" stroke="var(--accent)" stroke-width="1.5" opacity="0.3"/><path d="M40 10 A30 30 0 1 1 40 70 A15 30 0 1 0 40 10Z" fill="var(--accent)" opacity="0.2"/></svg><h3>Begin your dream journey</h3><p>Log your first dream to start tracking patterns and building lucidity.</p><button class="btn btn-primary" onclick="openDreamForm()">Log your first dream</button></div>`}
   </div>`;
 }
 
@@ -4384,14 +4435,24 @@ function renderDreamList(filter='all',search='') {
 
 function renderDreamCard(d) {
   const isLucid = d.isLucid;
-  const date=new Date(d.date+'T00:00:00'), day=date.getDate(), month=date.toLocaleString('en',{month:'short'});
-  const stars=Array.from({length:5},(_,i)=>`<span class="l-star${i<(d.lucidityLevel||0)?'':' dim'}">&#9733;</span>`).join('');
-  return `<div class="dream-entry-card ${isLucid?'is-lucid':''}" onclick="viewDream('${d.id}')" tabindex="0" role="button" aria-label="View dream: ${escapeHtml(d.title)}">
-    <div class="dream-thumb" data-thumb="${d.id}">${renderThumb(d.id)}</div>
+  const date = new Date(d.date + 'T00:00:00');
+  const dayLabel = date.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  const stars = Array.from({length: 5}, (_, i) => `<span class="l-star${i < (d.lucidityLevel || 0) ? '' : ' dim'}">&#9733;</span>`).join('');
+  const preview = (d.narrative || '').slice(0, 140) + ((d.narrative || '').length > 140 ? '…' : '');
+  return `<div class="dream-entry-card ${isLucid ? 'is-lucid' : ''}" onclick="viewDream('${d.id}')" tabindex="0" role="button" aria-label="View dream: ${escapeHtml(d.title)}">
+    <div class="dream-thumb" data-thumb="${d.id}">
+      ${renderThumb(d.id)}
+      ${isLucid ? '<div class="thumb-lucid-badge">Lucid</div>' : ''}
+      <div class="thumb-date-badge">${dayLabel}</div>
+    </div>
     <div class="dream-body">
-      <div class="dream-title">${escapeHtml(d.title)}${isLucid?'<span class="lucid-star-marker">&#9733;</span>':''}</div>
-      <div class="dream-preview">${escapeHtml(d.narrative)}</div>
-      <div class="dream-bottom"><div class="dream-lucidity">${stars}</div>${d.emotions?d.emotions.slice(0,3).map(e=>`<span class="badge badge-accent" style="font-size:0.68rem;">${e}</span>`).join(''):''}${d.tags&&d.tags.length?d.tags.slice(0,2).map(t=>`<span class="badge" style="background:rgba(245,217,122,0.1);color:var(--gold);font-size:0.65rem;">#${escapeHtml(t)}</span>`).join(''):''}</div>
+      <div class="dream-title">${escapeHtml(d.title)}${isLucid ? '<span class="lucid-star-marker" title="Lucid dream">&#9733;</span>' : ''}</div>
+      <div class="dream-preview">${escapeHtml(preview)}</div>
+      <div class="dream-bottom">
+        <div class="dream-lucidity" title="Lucidity level">${stars}</div>
+        ${d.emotions ? d.emotions.slice(0, 3).map(e => `<span class="badge badge-accent" style="font-size:0.68rem;">${e}</span>`).join('') : ''}
+        ${d.tags && d.tags.length ? d.tags.slice(0, 2).map(t => `<span class="badge" style="background:rgba(245,217,122,0.1);color:var(--gold);font-size:0.65rem;">#${escapeHtml(t)}</span>`).join('') : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -4546,17 +4607,21 @@ async function viewDream(id) {
       </div>
     </div>` : ''}
     <div style="line-height:1.8;white-space:pre-wrap;color:var(--text);font-size:0.93rem;">${escapeHtml(d.narrative)}</div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px;">
-      <button class="btn btn-secondary btn-sm" onclick="openStylePicker('${d.id}')" title="Choose art style"><i data-lucide="palette" style="width:14px;height:14px;"></i> Style</button>
-      <button class="btn btn-secondary btn-sm" onclick="openPromptPreview('${d.id}')" title="Preview/edit prompt"><i data-lucide="eye" style="width:14px;height:14px;"></i> Prompt</button>
-      <button class="btn btn-secondary btn-sm" onclick="regenerateImage('${d.id}')" title="Regenerate image"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Regenerate</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteDreamAction('${d.id}')">Delete</button>
-      <button class="btn btn-secondary" onclick="closeModal();openDreamForm('${d.id}')">Edit</button>
+    <div class="dream-detail-actions" style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="openStylePicker('${d.id}')" title="Choose art style"><i data-lucide="palette" style="width:14px;height:14px;"></i> Style</button>
+        <button class="btn btn-secondary btn-sm" onclick="openPromptPreview('${d.id}')" title="Preview/edit prompt"><i data-lucide="eye" style="width:14px;height:14px;"></i> Prompt</button>
+        <button class="btn btn-secondary btn-sm" onclick="regenerateImage('${d.id}')" title="Regenerate image"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Regenerate</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-danger btn-sm" onclick="deleteDreamAction('${d.id}')"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal();openDreamForm('${d.id}')"><i data-lucide="pencil" style="width:14px;height:14px;"></i> Edit</button>
+      </div>
     </div></div>`;
   document.body.appendChild(overlay); lucide.createIcons({nodes:[overlay]});
   overlay.addEventListener('click',e=>{if(e.target===overlay)closeModal();});
   // Load gallery strip after modal is shown
-  setTimeout(() => loadDreamGallery('<span class="badge badge-lucid" style="margin-left:8px;">Lucid</span>'), 100);
+  setTimeout(() => loadDreamGallery('${d.id}'), 100);
 }
 
 async function regenerateImage(dreamId) {
