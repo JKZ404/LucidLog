@@ -997,6 +997,8 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .dream-thumb-img.procedural, .dream-banner.procedural {
   filter: saturate(0.85) brightness(0.95);
 }
+/* The [data-banner] wrapper must be positioned so absolute labels (style, loading) stay inside */
+[data-banner] { position: relative; display: block; }
 .dream-banner-fallback, .dream-banner-shimmer { position: relative; }
 .banner-loading-label, .banner-style-label {
   position: absolute; bottom: 8px; right: 12px;
@@ -1237,6 +1239,229 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 }
 /* For square/portrait images, the banner takes more vertical space */
 .modal .dream-banner { max-height: 60vh; }
+
+
+/* ========== MILD RITUAL ENGINE (v5) ========== */
+.ritual-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: radial-gradient(ellipse at center, rgba(13,27,42,0.96) 0%, rgba(7,15,25,0.99) 100%);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px; animation: ritualFadeIn 0.6s var(--ease-out-expo);
+  overflow: hidden; user-select: none; -webkit-user-select: none;
+  touch-action: none;
+}
+@keyframes ritualFadeIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(20px); }
+}
+
+.ritual-close {
+  position: absolute; top: 20px; right: 20px;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(159,234,232,0.08); border: 1px solid rgba(159,234,232,0.2);
+  color: var(--muted); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth);
+  z-index: 10;
+}
+.ritual-close:hover { color: var(--accent); background: rgba(159,234,232,0.15); }
+
+.ritual-title {
+  font-family: 'Lora', serif; font-size: 1.3rem; font-weight: 500;
+  color: var(--muted); text-align: center; margin-bottom: 6px;
+  letter-spacing: 0.02em;
+  opacity: 0; animation: fadeUp 0.8s var(--ease-out-expo) 0.3s forwards;
+}
+.ritual-subtitle {
+  font-size: 0.82rem; color: var(--muted); text-align: center;
+  margin-bottom: 32px; max-width: 400px; line-height: 1.6;
+  opacity: 0; animation: fadeUp 0.8s var(--ease-out-expo) 0.5s forwards;
+}
+
+/* The orb — central focal point */
+.ritual-orb-wrap {
+  position: relative; width: 280px; height: 280px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 32px;
+}
+.ritual-orb {
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%,
+    rgba(159,234,232,0.15) 0%,
+    rgba(159,234,232,0.08) 40%,
+    rgba(13,27,42,0.6) 80%,
+    rgba(13,27,42,0.9) 100%);
+  border: 2px solid rgba(159,234,232,0.2);
+  cursor: pointer; position: relative;
+  transition: transform 0.15s var(--ease-spring-soft), box-shadow 0.4s var(--ease-smooth);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow:
+    0 0 60px rgba(159,234,232,0.1),
+    inset 0 0 40px rgba(159,234,232,0.05);
+  /* Charged state set via --charge variable (0..1) */
+  --charge: 0;
+}
+.ritual-orb::before {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(159,234,232,0.3) 0%, transparent 70%);
+  opacity: calc(var(--charge) * 0.8);
+  filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.ritual-orb::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%,
+    rgba(245,217,122,calc(var(--charge) * 0.4)) 0%,
+    transparent 50%);
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+.ritual-orb.holding {
+  transform: scale(1.02);
+}
+.ritual-orb.charged {
+  border-color: rgba(245,217,122,0.6);
+  box-shadow:
+    0 0 80px rgba(245,217,122,0.4),
+    0 0 160px rgba(245,217,122,0.2),
+    inset 0 0 60px rgba(245,217,122,0.15);
+}
+
+.ritual-orb-text {
+  font-family: 'Lora', serif; font-style: italic;
+  font-size: 0.92rem; color: var(--accent-bright);
+  text-align: center; padding: 0 32px; line-height: 1.5;
+  max-width: 180px;
+  opacity: calc(0.5 + var(--charge) * 0.5);
+  filter: drop-shadow(0 0 calc(var(--charge) * 8px) rgba(159,234,232,0.6));
+  transition: opacity 0.3s ease, filter 0.3s ease;
+  pointer-events: none;
+}
+
+/* Breath ring — outer ring that expands/contracts with breath cycle */
+.ritual-breath-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid rgba(159,234,232,0.25);
+  pointer-events: none;
+  animation: breathCycle var(--breath-duration, 8s) var(--ease-in-out-quint) infinite;
+}
+.ritual-breath-ring.ring-2 {
+  inset: -20px; border-color: rgba(159,234,232,0.12);
+  animation-delay: calc(var(--breath-duration, 8s) * -0.5);
+}
+.ritual-breath-ring.ring-3 {
+  inset: -40px; border-color: rgba(159,234,232,0.06);
+  animation-delay: calc(var(--breath-duration, 8s) * -0.25);
+}
+@keyframes breathCycle {
+  0%, 100% { transform: scale(0.85); opacity: 0.3; }
+  50%      { transform: scale(1.1); opacity: 0.8; }
+}
+
+/* Phase label — shows current phase name */
+.ritual-phase {
+  font-family: 'Lora', serif; font-size: 1.1rem;
+  color: var(--accent); text-align: center;
+  margin-bottom: 8px; min-height: 1.4rem;
+  letter-spacing: 0.03em;
+  transition: color 0.5s ease;
+}
+.ritual-phase.gathering { color: var(--accent); }
+.ritual-phase.imbuing { color: var(--accent-bright); }
+.ritual-phase.saturating { color: var(--gold-bright); }
+.ritual-phase.complete { color: var(--gold-bright); }
+
+.ritual-breath-cue {
+  font-size: 0.78rem; color: var(--muted); text-align: center;
+  margin-bottom: 24px; min-height: 1.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* Progress arc — visual charge indicator */
+.ritual-progress-arc {
+  position: absolute; top: -50px; left: 50%; transform: translateX(-50%);
+  width: 320px; height: 320px; pointer-events: none;
+}
+.ritual-progress-arc circle {
+  fill: none; stroke-width: 2;
+  transform: rotate(-90deg); transform-origin: 50% 50%;
+}
+.ritual-progress-arc .track { stroke: rgba(159,234,232,0.08); }
+.ritual-progress-arc .fill {
+  stroke: url(#ritualGrad);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.1s linear;
+  filter: drop-shadow(0 0 6px rgba(159,234,232,0.5));
+}
+
+/* Instruction text */
+.ritual-instruction {
+  font-size: 0.84rem; color: var(--muted); text-align: center;
+  max-width: 360px; line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* Ritual stats bar (bottom) */
+.ritual-stats {
+  position: absolute; bottom: 24px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 32px;
+  font-size: 0.74rem; color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.ritual-stats .stat-item { text-align: center; }
+.ritual-stats .stat-item .val { color: var(--accent); font-size: 0.9rem; font-weight: 600; }
+
+/* Particle canvas for charge + release effects */
+.ritual-particles {
+  position: absolute; inset: 0; pointer-events: none;
+  z-index: 1;
+}
+
+/* Completion overlay */
+.ritual-complete-overlay {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(245,217,122,0.15) 0%, transparent 70%);
+  animation: ritualCompleteBurst 1.5s var(--ease-out-expo) forwards;
+  pointer-events: none;
+}
+@keyframes ritualCompleteBurst {
+  0%   { opacity: 0; transform: scale(0.8); }
+  20%  { opacity: 1; transform: scale(1.05); }
+  60%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+.ritual-complete-text {
+  font-family: 'Lora', serif; font-size: 1.6rem; font-style: italic;
+  color: var(--gold-bright); text-align: center; max-width: 500px;
+  padding: 0 32px; line-height: 1.5;
+  text-shadow: 0 0 24px rgba(245,217,122,0.6);
+  opacity: 0;
+  animation: ritualTextBurnIn 1.5s var(--ease-out-expo) 0.2s forwards;
+}
+@keyframes ritualTextBurnIn {
+  0%   { opacity: 0; transform: translateY(20px); filter: blur(8px); }
+  40%  { opacity: 1; transform: translateY(0); filter: blur(0); }
+  100% { opacity: 0.9; transform: translateY(-4px); filter: blur(0); }
+}
+
+@media (max-width: 768px) {
+  .ritual-orb-wrap { width: 240px; height: 240px; }
+  .ritual-orb { width: 170px; height: 170px; }
+  .ritual-orb-text { font-size: 0.84rem; padding: 0 24px; max-width: 150px; }
+  .ritual-title { font-size: 1.1rem; }
+  .ritual-subtitle { font-size: 0.76rem; margin-bottom: 24px; }
+  .ritual-stats { gap: 20px; font-size: 0.68rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ritual-breath-ring { animation: none; opacity: 0.3; }
+  .ritual-orb::before { animation: none; }
+  .ritual-complete-overlay { animation: none; opacity: 1; }
+  .ritual-complete-text { animation: none; opacity: 1; }
+}
 
 /* ========== LAYOUT ========== */
 .app-shell { position: relative; z-index: 1; display: flex; min-height: 100dvh; }
@@ -1666,26 +1891,39 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, var(--surface), rgba(159,234,232,0.15));
 }
-/* Lucid badge overlay on thumbnail */
+/* Lucid badge overlay on thumbnail — top-left */
 .dream-entry-card .dream-thumb .thumb-lucid-badge {
-  position: absolute; top: 6px; left: 6px;
-  background: linear-gradient(135deg, rgba(159,234,232,0.9), rgba(95,189,185,0.9));
-  color: #0D1B2A; font-size: 0.62rem; font-weight: 700;
-  padding: 2px 8px; border-radius: 10px;
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  background: linear-gradient(135deg, rgba(159,234,232,0.95), rgba(95,189,185,0.95));
+  color: #0D1B2A; font-size: 0.6rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
   letter-spacing: 0.05em; text-transform: uppercase;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  max-width: calc(100% - 12px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Date badge overlay on thumbnail */
+/* Date badge overlay on thumbnail — bottom-right */
 .dream-entry-card .dream-thumb .thumb-date-badge {
-  position: absolute; bottom: 6px; right: 6px;
+  position: absolute; bottom: 6px; right: 6px; z-index: 2;
   background: rgba(13,27,42,0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  color: var(--accent-bright); font-size: 0.7rem; font-weight: 600;
-  padding: 3px 8px; border-radius: 8px;
+  color: var(--accent-bright); font-size: 0.66rem; font-weight: 600;
+  padding: 2px 7px; border-radius: 8px;
   font-family: 'JetBrains Mono', monospace;
   border: 1px solid rgba(159,234,232,0.2);
+  max-width: calc(100% - 12px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .dream-entry-card .dream-body { flex: 1; min-width: 0; }
-.dream-entry-card .dream-title { font-family: 'Lora', serif; font-weight: 600; margin-bottom: 3px; font-size: 1.02rem; display: flex; align-items: center; gap: 6px; }
+.dream-entry-card .dream-title {
+  font-family: 'Lora', serif; font-weight: 600; margin-bottom: 3px; font-size: 1.02rem;
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0; /* allow flex child to shrink */
+}
+.dream-entry-card .dream-title-text {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dream-entry-card .dream-title .lucid-star-marker { flex-shrink: 0; }
 .dream-entry-card .dream-preview {
   color: var(--muted); font-size: 0.85rem; line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -1697,14 +1935,11 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .dream-lucidity .l-star { color: var(--accent); font-size: 0.72rem; }
 .dream-lucidity .l-star.dim { opacity: 0.2; }
 
-/* Dream detail banner */
-.dream-banner {
-  width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--radius-sm);
-  margin-bottom: 16px; display: block;
-}
-.dream-banner-shimmer { width: 100%; height: 160px; border-radius: var(--radius-sm); margin-bottom: 16px; }
+/* Dream detail banner — legacy block removed; v5 rule above takes precedence.
+   Shimmer/fallback still defined here for non-banner contexts. */
+.dream-banner-shimmer { width: 100%; height: 200px; border-radius: var(--radius); margin-bottom: 16px; }
 .dream-banner-fallback {
-  width: 100%; height: 120px; border-radius: var(--radius-sm); margin-bottom: 16px;
+  width: 100%; height: 200px; border-radius: var(--radius); margin-bottom: 16px;
   background: linear-gradient(135deg, var(--surface), rgba(159,234,232,0.12));
   display: flex; align-items: center; justify-content: center;
 }
@@ -1774,15 +2009,8 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 }
 .wbtb-info strong { color: var(--accent); }
 
-/* ========== CONSTELLATION VIEW ========== */
-.constellation-container { position: relative; width: 100%; }
-.constellation-svg { width: 100%; height: auto; min-height: 400px; }
-.constellation-tooltip {
-  position: absolute; background: var(--surface); border: 1px solid var(--card-border);
-  border-radius: var(--radius-xs); padding: 8px 14px; font-size: 0.82rem;
-  color: var(--text); pointer-events: none; z-index: 10; box-shadow: var(--card-shadow);
-  white-space: nowrap; display: none;
-}
+/* ========== CONSTELLATION VIEW (legacy block — merged into v5 above) ========== */
+/* Tooltip styles consolidated in v5 block above to avoid conflicts. */
 
 /* ========== ACHIEVEMENT MODAL ========== */
 .achievement-modal {
@@ -1809,14 +2037,19 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .badge-shelf { display: flex; flex-wrap: wrap; gap: 12px; }
 .badge-item {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 14px 12px; border-radius: var(--radius-sm);
+  padding: 14px 10px; border-radius: var(--radius-sm);
   border: 1px solid var(--card-border); background: var(--card-bg);
-  width: 90px; text-align: center; transition: all var(--transition);
+  min-width: 90px; max-width: 110px; flex: 1 1 90px;
+  text-align: center; transition: all var(--transition);
+  overflow: hidden;
 }
 .badge-item.unlocked { border-color: rgba(245,217,122,0.4); background: rgba(245,217,122,0.06); }
 .badge-item.locked { opacity: 0.35; }
-.badge-item .badge-icon { font-size: 1.6rem; }
-.badge-item .badge-name { font-size: 0.68rem; color: var(--muted); font-weight: 600; line-height: 1.3; }
+.badge-item .badge-icon { font-size: 1.6rem; line-height: 1; }
+.badge-item .badge-name {
+  font-size: 0.68rem; color: var(--muted); font-weight: 600; line-height: 1.3;
+  word-wrap: break-word; overflow-wrap: break-word; hyphens: auto;
+}
 .badge-item.unlocked .badge-name { color: var(--gold); }
 
 /* ========== SETTINGS ========== */
@@ -1928,10 +2161,12 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 .sleep-quality-bar .qbar:hover { border-color: var(--accent); }
 .sleep-trend-svg { width: 100%; height: auto; min-height: 180px; }
 .sleep-log-row {
-  display: grid; grid-template-columns: 90px 1fr 70px 70px 60px; gap: 10px;
+  display: grid; grid-template-columns: 90px 1fr 70px 80px 40px; gap: 10px;
   padding: 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm);
   background: var(--card-bg); margin-bottom: 6px; align-items: center;
+  overflow: hidden;
 }
+.sleep-log-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sleep-log-row .sleep-date { font-family: 'Lora', serif; font-weight: 600; color: var(--accent); }
 .sleep-log-row .sleep-times { font-size: 0.86rem; color: var(--text); }
 .sleep-log-row .sleep-hrs { font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; color: var(--text); text-align: center; }
@@ -2160,7 +2395,7 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
 
 // ==================== IndexedDB SETUP ====================
 const DB_NAME = 'lucidlog-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 let db = null;
 
 async function openDB() {
@@ -2205,6 +2440,13 @@ async function openDB() {
         dv2.createIndex('dreamId', 'dreamId');
         dv2.createIndex('generatedAt', 'generatedAt');
       }
+      // v5: ritual logs — MILD affirmation sessions
+      // Each record: { id, date, intention, durationSec, completedAt }
+      if (!database.objectStoreNames.contains('ritual_logs')) {
+        const rl = database.createObjectStore('ritual_logs', { keyPath: 'id' });
+        rl.createIndex('date', 'date');
+        rl.createIndex('completedAt', 'completedAt');
+      }
     }
   });
   return db;
@@ -2241,8 +2483,16 @@ async function removeBookmark(techniqueId) {
 async function getDreamImage(dreamId) {
   try { return await (await openDB()).get('dream_images', dreamId); } catch { return null; }
 }
-async function putDreamImage(dreamId, url) {
-  try { await (await openDB()).put('dream_images', { dreamId, url, generatedAt: Date.now() }); } catch(e) { console.error('putDreamImage', e); }
+async function putDreamImage(dreamId, urlOrResult) {
+  try {
+    // Accept either a string URL (legacy) or a result object {url, provider, prompt, ...} (v5)
+    const url = typeof urlOrResult === 'string' ? urlOrResult : (urlOrResult && urlOrResult.url);
+    if (!url || typeof url !== 'string') {
+      console.error('putDreamImage: invalid url', urlOrResult);
+      return;
+    }
+    await (await openDB()).put('dream_images', { dreamId, url, generatedAt: Date.now() });
+  } catch(e) { console.error('putDreamImage', e); }
 }
 async function deleteDreamImage(dreamId) {
   try { await (await openDB()).delete('dream_images', dreamId); } catch(e) { console.error('deleteDreamImage', e); }
@@ -2360,6 +2610,23 @@ async function setPrimaryDreamImage(imageId) {
     }
     await tx.done;
   } catch (e) { console.error('setPrimaryDreamImage', e); }
+}
+
+
+// ==================== RITUAL LOG DATA ACCESS (v5) ====================
+async function getAllRitualLogs() {
+  try { return await (await openDB()).getAll('ritual_logs'); } catch { return []; }
+}
+async function putRitualLog(rec) {
+  try { await (await openDB()).put('ritual_logs', rec); } catch(e) { console.error('putRitualLog', e); }
+}
+async function getRitualLog(date) {
+  try {
+    const d = await openDB();
+    if (!d.objectStoreNames.contains('ritual_logs')) return null;
+    const idx = d.transaction('ritual_logs').store.index('date');
+    return await idx.get(date);
+  } catch { return null; }
 }
 
 // ==================== MIGRATION (localStorage → IndexedDB) ====================
@@ -4139,8 +4406,15 @@ async function retryPendingImages() {
   window.__dreamImageCache = window.__dreamImageCache || {};
   for (const d of dreams) {
     const rec = await getDreamImage(d.id);
-    if (rec && rec.url) {
+    if (rec && typeof rec.url === 'string' && rec.url.length > 0) {
       window.__dreamImageCache[d.id] = rec.url;
+    } else if (rec && typeof rec.url === 'object' && rec.url && typeof rec.url.url === 'string') {
+      // Repair legacy bad data
+      window.__dreamImageCache[d.id] = rec.url.url;
+      await putDreamImage(d.id, rec.url.url);
+    } else if (rec) {
+      // Bad record — clean up
+      await deleteDreamImage(d.id);
     }
   }
   // Retry pending
@@ -4155,7 +4429,7 @@ async function retryPendingImages() {
 // Render thumbnail for dream list card (checks IDB async later if not cached)
 function renderThumb(dreamId) {
   const cached = window.__dreamImageCache && window.__dreamImageCache[dreamId];
-  if (cached) {
+  if (cached && typeof cached === 'string') {
     return `<img src="${cached}" alt="" loading="lazy">`;
   }
   return `<div class="thumb-shimmer shimmer"></div>`;
@@ -4164,7 +4438,7 @@ function renderThumb(dreamId) {
 // Render banner for detail view
 function renderBanner(dreamId) {
   const cached = window.__dreamImageCache && window.__dreamImageCache[dreamId];
-  if (cached) {
+  if (cached && typeof cached === 'string') {
     return `<img class="dream-banner" src="${cached}" alt="Dream illustration" loading="lazy">`;
   }
   return `<div class="dream-banner-shimmer shimmer"></div>`;
@@ -4175,14 +4449,26 @@ async function loadImagesIntoDOM(dreamIds, container) {
   window.__dreamImageCache = window.__dreamImageCache || {};
   for (const id of dreamIds) {
     const rec = await getDreamImage(id);
-    if (rec && rec.url) {
+    // Defensive: only cache if url is a non-empty string
+    if (rec && typeof rec.url === 'string' && rec.url.length > 0) {
       window.__dreamImageCache[id] = rec.url;
+    } else if (rec && typeof rec.url === 'object') {
+      // Legacy bad data: rec.url is an object (from old putDreamImage bug).
+      // Try to extract the actual url string, or clean up.
+      if (rec.url && typeof rec.url.url === 'string') {
+        window.__dreamImageCache[id] = rec.url.url;
+        // Repair the stored record
+        await putDreamImage(id, rec.url.url);
+      } else {
+        // Unrecoverable — delete the bad record so it can regenerate
+        await deleteDreamImage(id);
+      }
     }
   }
   if (!container) container = document;
   for (const id of dreamIds) {
     const url = window.__dreamImageCache[id];
-    if (!url) continue;
+    if (!url || typeof url !== 'string') continue;
     const thumb = container.querySelector(`[data-thumb="${id}"]`);
     if (thumb) thumb.innerHTML = `<img src="${url}" alt="" loading="lazy">`;
     const banner = container.querySelector(`[data-banner="${id}"]`);
@@ -4213,6 +4499,11 @@ const ACHIEVEMENTS_DEF = [
   { id: 'long_lucid', name: 'Enduring Mind', icon: '\u23F1\uFE0F', desc: 'Stay lucid for 5+ minutes in one dream' },
   { id: 'tag_curator', name: 'Tag Curator', icon: '\uD83C\uDFF7\uFE0F', desc: 'Tag 20 dreams' },
   { id: 'sleep_tracker', name: 'Sleep Sage', icon: '\uD83D\uDECF\uFE0F', desc: 'Log sleep for 14 consecutive nights' },
+  // v5 ritual achievements
+  { id: 'ritual_first', name: 'First Ritual', icon: '\uD83C\uDF88', desc: 'Complete your first MILD affirmation ritual' },
+  { id: 'ritual_7', name: 'Devoted Dreamer', icon: '\uD83D\uDD25', desc: 'Complete the ritual on 7 separate nights' },
+  { id: 'ritual_30', name: 'Master of Intention', icon: '\uD83D\uDC51', desc: 'Complete the ritual on 30 separate nights' },
+  { id: 'ritual_full', name: 'Saturated Mind', icon: '\uD83D\uDCAB', desc: 'Reach 100% charge in a single ritual' },
 ];
 
 let achievementDebounceTimer = null;
@@ -4225,6 +4516,7 @@ async function checkAchievements() {
     const totalDreams = dreamsCache.length;
     const lucidDreams = dreamsCache.filter(d => d.isLucid).length;
     const rcCount = rcLogCache.length;
+    const ritualLogs = await getAllRitualLogs();
     const taggedDreams = dreamsCache.filter(d => d.tags && d.tags.length).length;
     const longLucidDreams = dreamsCache.filter(d => d.isLucid && (d.lucidDuration || 0) >= 5).length;
     const stabilizerDreams = dreamsCache.filter(d => d.stabilization && d.stabilization.length >= 3).length;
@@ -4252,6 +4544,11 @@ async function checkAchievements() {
       { id: 'long_lucid', cond: longLucidDreams >= 1 },
       { id: 'tag_curator', cond: taggedDreams >= 20 },
       { id: 'sleep_tracker', cond: sleepStreak >= 14 },
+      // v5 ritual achievements
+      { id: 'ritual_first', cond: ritualLogs.length >= 1 },
+      { id: 'ritual_7', cond: ritualLogs.length >= 7 },
+      { id: 'ritual_30', cond: ritualLogs.length >= 30 },
+      { id: 'ritual_full', cond: ritualLogs.some(r => r.durationSec >= 30) },
     ];
     for (const check of checks) {
       if (check.cond && !unlocked.includes(check.id)) {
@@ -4446,7 +4743,7 @@ function renderDreamCard(d) {
       <div class="thumb-date-badge">${dayLabel}</div>
     </div>
     <div class="dream-body">
-      <div class="dream-title">${escapeHtml(d.title)}${isLucid ? '<span class="lucid-star-marker" title="Lucid dream">&#9733;</span>' : ''}</div>
+      <div class="dream-title"><span class="dream-title-text">${escapeHtml(d.title)}</span>${isLucid ? '<span class="lucid-star-marker" title="Lucid dream">&#9733;</span>' : ''}</div>
       <div class="dream-preview">${escapeHtml(preview)}</div>
       <div class="dream-bottom">
         <div class="dream-lucidity" title="Lucidity level">${stars}</div>
@@ -5159,6 +5456,8 @@ async function renderRitual() {
   const rcSetup = await getSetting('rcNotifSetup', { technique: 'fingers', frequency: 5, enabled: false });
   const ritualTime = await getSetting('ritualTime', '22:00');
   const bedtime = await getSetting('sleepSchedule', { bedtime: '23:00', waketime: '07:00' });
+  const tonightLog = await getRitualLog(today);
+  const alreadyCompletedToday = tonightLog && tonightLog.completedAt;
 
   // Calculate WBTB time: 5h30m from now
   const now = new Date();
@@ -5179,10 +5478,16 @@ async function renderRitual() {
 
     <div class="card ritual-step" style="position:relative;">
       <div class="step-num">Step 2</div>
-      <h3 style="margin-bottom:10px;">Set Your MILD Intention</h3>
-      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">Repeat this affirmation as you fall asleep. Make it personal and meaningful for best results.</p>
+      <h3 style="margin-bottom:10px;">Charge Your MILD Intention</h3>
+      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">Write your affirmation, then hold the orb to charge it. The ritual combines breath, vibration, and focus to imprint the intention on your dreaming mind.</p>
       <textarea class="ritual-intention-input" id="ritualIntention" rows="2">${escapeHtml(intention)}</textarea>
-      <div style="text-align:right;margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="saveIntention()">Save intention</button></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="saveIntention()">Save text</button>
+        <button class="btn btn-primary" onclick="startMildRitualFromPage()" style="background:linear-gradient(135deg, var(--accent-bright), var(--gold));color:#0D1B2A;font-weight:700;padding:10px 24px;">
+          <i data-lucide="sparkles" style="width:16px;height:16px;"></i> Begin Ritual
+        </button>
+      </div>
+      ${alreadyCompletedToday ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--success);display:flex;align-items:center;gap:8px;"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Ritual completed tonight at ${new Date(alreadyCompletedToday).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${tonightLog.durationSec}s held</div>` : ''}
     </div>
 
     <div class="card ritual-step" style="position:relative;">
@@ -5196,6 +5501,17 @@ async function renderRitual() {
       <div class="wbtb-info"><strong>Note:</strong> WBTB alarm uses the Notification API with a timed delay. If you close this tab before the alarm fires, the notification will not appear unless a service worker is active in the background. For reliable background delivery, install the app as a PWA over HTTPS.</div>
     </div>
   </div>`;
+}
+
+
+async function startMildRitualFromPage() {
+  // Save the intention text first
+  const text = document.getElementById('ritualIntention')?.value.trim();
+  if (text) {
+    const today = new Date().toISOString().split('T')[0];
+    await putIntention({ date: today, text, createdAt: Date.now() });
+  }
+  await openMildRitual();
 }
 
 async function saveIntention() {
@@ -6825,6 +7141,504 @@ function switchDreamImage(dreamId, imageId) {
     }
   });
 }
+// ==================== MILD RITUAL ENGINE (v5) ====================
+// A game-like hold-to-charge affirmation system with haptic + visual + audio crescendo.
+
+const RITUAL_PHASES = [
+  { id: 'awakening',  name: 'Awakening',  threshold: 0.00, breathDur: 4, color: 'var(--muted)' },
+  { id: 'gathering',  name: 'Gathering',  threshold: 0.25, breathDur: 5, color: 'var(--accent)' },
+  { id: 'imbuing',    name: 'Imbuing',    threshold: 0.50, breathDur: 6, color: 'var(--accent-bright)' },
+  { id: 'saturating', name: 'Saturating', threshold: 0.75, breathDur: 8, color: 'var(--gold-bright)' },
+  { id: 'complete',   name: 'Complete',   threshold: 1.00, breathDur: 8, color: 'var(--gold-bright)' },
+];
+
+const RITUAL_TOTAL_DURATION_MS = 30000; // 30 seconds of holding = full charge
+const RITUAL_MIN_HOLD_FOR_LOG = 5000;   // 5s minimum to count as a ritual
+
+let __ritualState = null;
+
+function getRitualPhase(progress) {
+  for (let i = RITUAL_PHASES.length - 1; i >= 0; i--) {
+    if (progress >= RITUAL_PHASES[i].threshold) return RITUAL_PHASES[i];
+  }
+  return RITUAL_PHASES[0];
+}
+
+// Haptic patterns — escalate with phase. Each pulse <= 200ms for Android safety.
+const RITUAL_HAPTICS = {
+  awakening:  [40],                                    // single soft tap every 2s
+  gathering:  [60, 40, 60],                            // heartbeat-ish
+  imbuing:    [80, 40, 80, 40, 100],                   // stronger heartbeat
+  saturating: [100, 30, 100, 30, 100, 30, 120],        // rolling sustained
+  release:    [120, 60, 180, 80, 240, 100, 300],       // crescendo burst
+  complete:   [200, 100, 200, 100, 200],               // triple boom
+};
+
+function vibrateSafe(pattern) {
+  if (!navigator.vibrate) return;
+  try { navigator.vibrate(pattern); } catch(e) { /* ignore */ }
+}
+
+// Audio: low drone using Web Audio API. Started on user interaction.
+let __ritualAudioCtx = null;
+let __ritualDroneOsc = null;
+let __ritualDroneGain = null;
+let __ritualDroneOsc2 = null; // second osc for richer timbre
+
+function startRitualAudio() {
+  try {
+    if (!__ritualAudioCtx) {
+      __ritualAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (__ritualAudioCtx.state === 'suspended') __ritualAudioCtx.resume();
+    if (__ritualDroneOsc) return; // already playing
+
+    // Two oscillators slightly detuned for richness
+    __ritualDroneOsc = __ritualAudioCtx.createOscillator();
+    __ritualDroneOsc.type = 'sine';
+    __ritualDroneOsc.frequency.value = 110; // A2
+
+    __ritualDroneOsc2 = __ritualAudioCtx.createOscillator();
+    __ritualDroneOsc2.type = 'sine';
+    __ritualDroneOsc2.frequency.value = 110.5; // slight detune for beating
+
+    __ritualDroneGain = __ritualAudioCtx.createGain();
+    __ritualDroneGain.gain.value = 0;
+    // Lowpass to soften
+    const filter = __ritualAudioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 800;
+
+    __ritualDroneOsc.connect(filter);
+    __ritualDroneOsc2.connect(filter);
+    filter.connect(__ritualDroneGain);
+    __ritualDroneGain.connect(__ritualAudioCtx.destination);
+    __ritualDroneOsc.start();
+    __ritualDroneOsc2.start();
+  } catch(e) { console.warn('Ritual audio failed', e); }
+}
+
+function setRitualAudioIntensity(progress) {
+  if (!__ritualDroneGain || !__ritualAudioCtx) return;
+  // Volume rises 0 -> 0.15 (gentle)
+  const targetVol = 0.02 + progress * 0.13;
+  __ritualDroneGain.gain.linearRampToValueAtTime(targetVol, __ritualAudioCtx.currentTime + 0.3);
+  // Pitch rises slightly (110 -> 165 Hz, a perfect fifth)
+  const targetFreq = 110 + progress * 55;
+  __ritualDroneOsc.frequency.linearRampToValueAtTime(targetFreq, __ritualAudioCtx.currentTime + 0.3);
+  __ritualDroneOsc2.frequency.linearRampToValueAtTime(targetFreq + 0.5, __ritualAudioCtx.currentTime + 0.3);
+}
+
+function stopRitualAudio() {
+  if (!__ritualDroneGain || !__ritualAudioCtx) return;
+  __ritualDroneGain.gain.linearRampToValueAtTime(0, __ritualAudioCtx.currentTime + 0.5);
+  setTimeout(() => {
+    try {
+      if (__ritualDroneOsc) __ritualDroneOsc.stop();
+      if (__ritualDroneOsc2) __ritualDroneOsc2.stop();
+      __ritualDroneOsc = null;
+      __ritualDroneOsc2 = null;
+    } catch(e) {}
+  }, 600);
+}
+
+// Open the ritual overlay
+async function openMildRitual() {
+  const today = new Date().toISOString().split('T')[0];
+  const existingIntention = await getIntention(today);
+  const defaultIntention = 'Tonight I will recognise that I am dreaming.';
+  const intention = existingIntention ? existingIntention.text : defaultIntention;
+
+  const todayLog = await getRitualLog(today);
+  const alreadyCompleted = todayLog && todayLog.completedAt;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ritual-overlay';
+  overlay.id = 'ritualOverlay';
+  overlay.innerHTML = `
+    <button class="ritual-close" onclick="closeMildRitual()" aria-label="Close ritual">
+      <i data-lucide="x" style="width:20px;height:20px;"></i>
+    </button>
+    <div class="ritual-title">MILD Affirmation Ritual</div>
+    <div class="ritual-subtitle">${alreadyCompleted ? 'You have already charged your intention tonight. Hold again to reinforce.' : 'Hold the orb. Breathe with it. Let the affirmation sink into your dreaming mind.'}</div>
+
+    <div class="ritual-orb-wrap">
+      <svg class="ritual-progress-arc" viewBox="0 0 320 320">
+        <defs>
+          <linearGradient id="ritualGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#9FEAE8"/>
+            <stop offset="50%" stop-color="#B8F5F3"/>
+            <stop offset="100%" stop-color="#F5D97A"/>
+          </linearGradient>
+        </defs>
+        <circle class="track" cx="160" cy="160" r="150"/>
+        <circle class="fill" id="ritualArcFill" cx="160" cy="160" r="150"
+          stroke-dasharray="942.48" stroke-dashoffset="942.48"/>
+      </svg>
+      <div class="ritual-breath-ring" id="ritualBreathRing1"></div>
+      <div class="ritual-breath-ring ring-2" id="ritualBreathRing2"></div>
+      <div class="ritual-breath-ring ring-3" id="ritualBreathRing3"></div>
+      <div class="ritual-orb" id="ritualOrb" style="--charge: 0;">
+        <div class="ritual-orb-text" id="ritualOrbText">${escapeHtml(intention)}</div>
+      </div>
+    </div>
+
+    <div class="ritual-phase" id="ritualPhase">Awakening</div>
+    <div class="ritual-breath-cue" id="ritualBreathCue">Breathe in&hellip; Breathe out&hellip;</div>
+    <div class="ritual-instruction" id="ritualInstruction">
+      Press and hold the orb. Release only when you feel the intention has settled.
+    </div>
+
+    <canvas class="ritual-particles" id="ritualParticles"></canvas>
+
+    <div class="ritual-stats">
+      <div class="stat-item"><div class="val" id="ritualStatTime">0.0s</div><div>held</div></div>
+      <div class="stat-item"><div class="val" id="ritualStatCharge">0%</div><div>charge</div></div>
+      <div class="stat-item"><div class="val" id="ritualStatStreak">${await getRitualStreak()}</div><div>night streak</div></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons({nodes:[overlay]});
+
+  // Initialize ritual state
+  __ritualState = {
+    holding: false,
+    startTime: 0,
+    accumulatedMs: 0,  // total held time across multiple holds
+    holdStartTime: 0,  // start of current hold
+    progress: 0,       // 0..1
+    phase: RITUAL_PHASES[0],
+    intention,
+    completed: false,
+    rafId: null,
+    particleCanvas: document.getElementById('ritualParticles'),
+    particleCtx: null,
+    particles: [],
+    breathStartTime: Date.now(),
+    lastHapticPhase: null,
+  };
+
+  // Setup particle canvas
+  const canvas = __ritualState.particleCanvas;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  __ritualState.particleCtx = canvas.getContext('2d');
+
+  // Bind hold events (mouse, touch, keyboard space)
+  const orb = document.getElementById('ritualOrb');
+  const startHold = (e) => {
+    e.preventDefault();
+    if (__ritualState.completed) return;
+    __ritualState.holding = true;
+    __ritualState.holdStartTime = Date.now();
+    orb.classList.add('holding');
+    startRitualAudio();
+    // Initial haptic
+    vibrateSafe(RITUAL_HAPTICS[__ritualState.phase.id] || [40]);
+  };
+  const endHold = (e) => {
+    if (e) e.preventDefault();
+    if (!__ritualState.holding) return;
+    __ritualState.holding = false;
+    __ritualState.accumulatedMs += Date.now() - __ritualState.holdStartTime;
+    orb.classList.remove('holding');
+    // If completed, finalize; else just pause
+    if (__ritualState.progress >= 1 && !__ritualState.completed) {
+      completeRitual();
+    } else {
+      // Soft haptic on release
+      vibrateSafe([30]);
+    }
+  };
+  orb.addEventListener('mousedown', startHold);
+  orb.addEventListener('touchstart', startHold, { passive: false });
+  document.addEventListener('mouseup', endHold);
+  document.addEventListener('touchend', endHold);
+  document.addEventListener('touchcancel', endHold);
+  // Spacebar hold
+  const spaceHandler = (e) => {
+    if (e.code === 'Space' && !__ritualState.completed) {
+      e.preventDefault();
+      if (e.type === 'keydown' && !__ritualState.holding && !e.repeat) {
+        startHold(e);
+      } else if (e.type === 'keyup' && __ritualState.holding) {
+        endHold(e);
+      }
+    }
+  };
+  document.addEventListener('keydown', spaceHandler);
+  document.addEventListener('keyup', spaceHandler);
+  __ritualState._spaceHandler = spaceHandler;
+  __ritualState._endHold = endHold;
+
+  // Resize handler
+  const resizeHandler = () => {
+    const c = __ritualState.particleCanvas;
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+  };
+  window.addEventListener('resize', resizeHandler);
+  __ritualState._resizeHandler = resizeHandler;
+
+  // Start animation loop
+  __ritualState.rafId = requestAnimationFrame(ritualTick);
+}
+
+function closeMildRitual() {
+  if (!__ritualState) return;
+  // Cleanup
+  cancelAnimationFrame(__ritualState.rafId);
+  document.removeEventListener('mouseup', __ritualState._endHold);
+  document.removeEventListener('touchend', __ritualState._endHold);
+  document.removeEventListener('touchcancel', __ritualState._endHold);
+  document.removeEventListener('keydown', __ritualState._spaceHandler);
+  document.removeEventListener('keyup', __ritualState._spaceHandler);
+  window.removeEventListener('resize', __ritualState._resizeHandler);
+  stopRitualAudio();
+  vibrateSafe(0); // cancel any ongoing vibration
+  __ritualState = null;
+  const overlay = document.getElementById('ritualOverlay');
+  if (overlay) {
+    overlay.style.animation = 'fadeIn 0.3s reverse forwards';
+    setTimeout(() => overlay.remove(), 300);
+  }
+}
+
+// Main animation tick
+function ritualTick(now) {
+  if (!__ritualState) return;
+  const s = __ritualState;
+
+  // Update accumulated time if holding
+  if (s.holding && !s.completed) {
+    const currentHoldMs = Date.now() - s.holdStartTime;
+    const totalMs = s.accumulatedMs + currentHoldMs;
+    s.progress = Math.min(1, totalMs / RITUAL_TOTAL_DURATION_MS);
+  }
+
+  // Update phase based on progress
+  const newPhase = getRitualPhase(s.progress);
+  if (newPhase.id !== s.phase.id) {
+    s.phase = newPhase;
+    onRitualPhaseChange(s);
+  }
+
+  // Update DOM
+  const orb = document.getElementById('ritualOrb');
+  if (orb) orb.style.setProperty('--charge', s.progress.toFixed(3));
+
+  const arcFill = document.getElementById('ritualArcFill');
+  if (arcFill) {
+    const circumference = 2 * Math.PI * 150;
+    const offset = circumference * (1 - s.progress);
+    arcFill.style.strokeDashoffset = offset;
+  }
+
+  const phaseEl = document.getElementById('ritualPhase');
+  if (phaseEl) {
+    phaseEl.textContent = s.phase.name;
+    phaseEl.className = 'ritual-phase ' + s.phase.id;
+  }
+
+  // Update stats
+  const totalHeld = s.holding ? s.accumulatedMs + (Date.now() - s.holdStartTime) : s.accumulatedMs;
+  document.getElementById('ritualStatTime').textContent = (totalHeld / 1000).toFixed(1) + 's';
+  document.getElementById('ritualStatCharge').textContent = Math.round(s.progress * 100) + '%';
+
+  // Update breath cue
+  updateBreathCue(s);
+
+  // Update audio intensity
+  if (s.holding) setRitualAudioIntensity(s.progress);
+
+  // Update particles
+  updateRitualParticles(s);
+
+  // Continue loop
+  s.rafId = requestAnimationFrame(ritualTick);
+}
+
+function onRitualPhaseChange(s) {
+  // Update breath ring duration
+  document.querySelectorAll('.ritual-breath-ring').forEach(r => {
+    r.style.setProperty('--breath-duration', s.phase.breathDur + 's');
+  });
+  // Haptic pulse on phase change (except first)
+  if (s.progress > 0) {
+    vibrateSafe(RITUAL_HAPTICS[s.phase.id] || [60]);
+  }
+  // Update instruction text
+  const instructions = {
+    awakening: 'Press and hold the orb. Release only when you feel the intention has settled.',
+    gathering: 'Breathe with the rings. Let each inhale draw the intention deeper.',
+    imbuing: 'Feel the affirmation saturating your mind. You are entering the dream state.',
+    saturating: 'Almost there. Hold steady. The intention is becoming part of you.',
+    complete: 'Release now. The ritual is complete.',
+  };
+  const el = document.getElementById('ritualInstruction');
+  if (el) el.textContent = instructions[s.phase.id] || '';
+  // Show "release" cue when complete
+  if (s.phase.id === 'complete') {
+    const orb = document.getElementById('ritualOrb');
+    if (orb) orb.classList.add('charged');
+  }
+}
+
+function updateBreathCue(s) {
+  const cue = document.getElementById('ritualBreathCue');
+  if (!cue) return;
+  const breathDur = s.phase.breathDur * 1000;
+  const elapsed = (Date.now() - s.breathStartTime) % breathDur;
+  const isInhale = elapsed < breathDur / 2;
+  cue.textContent = isInhale ? 'Breathe in&hellip;' : 'Breathe out&hellip;';
+}
+
+// Particle system: drift particles toward orb while holding; burst on completion
+function updateRitualParticles(s) {
+  const ctx = s.particleCtx;
+  if (!ctx) return;
+  const w = s.particleCanvas.width, h = s.particleCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Spawn particles while holding
+  if (s.holding && s.particles.length < 80) {
+    for (let i = 0; i < 2; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.max(w, h) * 0.6;
+      s.particles.push({
+        x: w/2 + Math.cos(angle) * dist,
+        y: h/2 + Math.sin(angle) * dist,
+        tx: w/2, ty: h/2,
+        vx: 0, vy: 0,
+        life: 1,
+        size: 1 + Math.random() * 2,
+        hue: s.progress > 0.75 ? 'gold' : 'teal',
+      });
+    }
+  }
+
+  // Update + draw
+  const orb = document.getElementById('ritualOrb');
+  const orbRect = orb ? orb.getBoundingClientRect() : { left: w/2, top: h/2, width: 200, height: 200 };
+  const cx = orbRect.left + orbRect.width / 2;
+  const cy = orbRect.top + orbRect.height / 2;
+
+  for (let i = s.particles.length - 1; i >= 0; i--) {
+    const p = s.particles[i];
+    if (s.completed) {
+      // Explosion: push outward
+      const dx = p.x - cx, dy = p.y - cy;
+      const d = Math.hypot(dx, dy) || 1;
+      p.vx += (dx / d) * 0.8;
+      p.vy += (dy / d) * 0.8;
+      p.x += p.vx; p.y += p.vy;
+      p.life -= 0.015;
+    } else {
+      // Drift toward orb
+      const dx = cx - p.x, dy = cy - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const speed = 1 + s.progress * 3;
+      p.vx += (dx / d) * 0.1 * speed;
+      p.vy += (dy / d) * 0.1 * speed;
+      p.vx *= 0.95; p.vy *= 0.95;
+      p.x += p.vx; p.y += p.vy;
+      // Absorb when close
+      if (d < 60) p.life -= 0.05;
+    }
+    if (p.life <= 0) { s.particles.splice(i, 1); continue; }
+
+    const color = p.hue === 'gold' ? '245,217,122' : '159,234,232';
+    ctx.fillStyle = `rgba(${color},${p.life * 0.7})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0.1, p.size * p.life), 0, Math.PI * 2);
+    ctx.fill();
+    // Glow
+    ctx.fillStyle = `rgba(${color},${p.life * 0.2})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0.1, p.size * p.life * 3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+async function completeRitual() {
+  const s = __ritualState;
+  if (!s || s.completed) return;
+  s.completed = true;
+
+  // Massive haptic burst
+  vibrateSafe(RITUAL_HAPTICS.release);
+  setTimeout(() => vibrateSafe(RITUAL_HAPTICS.complete), 800);
+
+  // Peak audio
+  setRitualAudioIntensity(1);
+  setTimeout(() => stopRitualAudio(), 1500);
+
+  // Spawn explosion particles
+  for (let i = 0; i < 100; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 6;
+    s.particles.push({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      size: 1.5 + Math.random() * 2.5,
+      hue: 'gold',
+    });
+  }
+
+  // Show completion overlay
+  const overlay = document.getElementById('ritualOverlay');
+  if (overlay) {
+    const completeDiv = document.createElement('div');
+    completeDiv.className = 'ritual-complete-overlay';
+    completeDiv.innerHTML = `<div class="ritual-complete-text">${escapeHtml(s.intention)}</div>`;
+    overlay.appendChild(completeDiv);
+  }
+
+  // Persist ritual log
+  const today = new Date().toISOString().split('T')[0];
+  const durationSec = Math.round((s.accumulatedMs + (Date.now() - s.holdStartTime)) / 1000);
+  await putRitualLog({
+    id: 'ritual_' + today + '_' + Date.now().toString(36),
+    date: today,
+    intention: s.intention,
+    durationSec,
+    completedAt: Date.now(),
+  });
+
+  // Update intention record too (in case it was edited)
+  await putIntention({ date: today, text: s.intention, createdAt: Date.now() });
+
+  // Check achievements
+  checkAchievements();
+
+  // Auto-close after 4 seconds
+  setTimeout(() => {
+    closeMildRitual();
+    showToast('Intention charged. Sweet dreams.', 'moon', 'success');
+    // Refresh ritual page if open
+    if (currentPage === 'ritual') renderPage('ritual');
+  }, 4000);
+}
+
+async function getRitualStreak() {
+  const logs = await getAllRitualLogs();
+  if (!logs.length) return 0;
+  // Sort by date desc
+  const dates = [...new Set(logs.map(l => l.date))].sort().reverse();
+  const today = new Date().toISOString().split('T')[0];
+  const yest = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  if (dates[0] !== today && dates[0] !== yest) return 0;
+  let streak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    if ((new Date(dates[i-1]) - new Date(dates[i])) / 86400000 === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+
 // ==================== MICRO-INTERACTIONS (v5) ====================
 function setupMagneticButtons() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
