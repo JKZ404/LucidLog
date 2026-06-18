@@ -10,8 +10,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
+<script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/idb@8/build/umd.js" defer></script>
 <!-- Three.js for WebGPU/WebGL volumetric nebula + shader ritual orb -->
 <script type="importmap">
 {
@@ -38,10 +38,10 @@ window.__lucidRenderTier = (function() {
 if (window.__webgpuSupported) console.log('%c[LucidLog v6] WebGPU available — using progressive enhancement over WebGL2 baseline.', 'color:#9FEAE8');
 </script>
 <!-- GSAP for timeline-based UI animations -->
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
 <!-- Tone.js for audio-reactive ritual visualizer -->
-<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js" defer></script>
 <script>
 /* Inline PWA manifest — crescent moon icon as data URI */
 (function(){
@@ -927,6 +927,16 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   content-visibility: auto;
   contain-intrinsic-size: 1px 200px;
 }
+/* v6.1: also apply to dream-list items and dictionary rows for very long lists */
+.dream-list .dream-entry-card,
+.dream-list .dream-card,
+.dict-card,
+.challenge-card,
+.recurring-card,
+.sleep-log-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 180px;
+}
 
 /* Sidebar logo: subtle gradient + glow */
 .sidebar-logo .logo-moon {
@@ -1445,10 +1455,16 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   font-size: 0.92rem; color: var(--accent-bright);
   text-align: center; padding: 0 32px; line-height: 1.5;
   max-width: 180px;
-  opacity: calc(0.5 + var(--charge) * 0.5);
-  filter: drop-shadow(0 0 calc(var(--charge) * 8px) rgba(159,234,232,0.6));
+  opacity: calc(0.6 + var(--charge) * 0.4);
+  /* v6.1: stronger drop shadow so text reads through the translucent shader window */
+  filter: drop-shadow(0 0 4px rgba(13,27,42,0.95)) drop-shadow(0 0 calc(var(--charge) * 8px) rgba(159,234,232,0.6));
   transition: opacity 0.3s ease, filter 0.3s ease;
   pointer-events: none;
+  /* v6.1: ensure text sits above shader canvas via z-index even within the orb div */
+  position: relative;
+  z-index: 4;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(13,27,42,0.9), 0 0 12px rgba(13,27,42,0.7);
 }
 
 /* Breath ring — outer ring that expands/contracts with breath cycle */
@@ -3177,13 +3193,25 @@ async function initVolumetricNebula() {
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), __nebulaMaterial);
     __nebulaScene.add(quad);
 
-    // Mouse parallax
+    // Mouse parallax — v6.1: only update target values on mousemove (cheap);
+    // the actual uniform write happens inside the RAF loop (already smoothed).
     let mouseX = 0, mouseY = 0;
     const onMouseMove = (e) => {
       mouseX = (e.clientX / window.innerWidth) - 0.5;
       mouseY = (e.clientY / window.innerHeight) - 0.5;
     };
-    window.addEventListener('mousemove', onMouseMove, { passive: true });
+    // v6.1: throttle mousemove to ~60Hz max via RAF gating
+    let mousePending = false;
+    const onMouseMoveRaf = (e) => {
+      // Store latest coords; one RAF will pick them up
+      mouseX = (e.clientX / window.innerWidth) - 0.5;
+      mouseY = (e.clientY / window.innerHeight) - 0.5;
+      if (!mousePending) {
+        mousePending = true;
+        requestAnimationFrame(() => { mousePending = false; });
+      }
+    };
+    window.addEventListener('mousemove', onMouseMoveRaf, { passive: true });
     window.addEventListener('touchmove', (e) => {
       if (e.touches.length) {
         mouseX = (e.touches[0].clientX / window.innerWidth) - 0.5;
@@ -3191,10 +3219,15 @@ async function initVolumetricNebula() {
       }
     }, { passive: true });
 
-    // Resize
+    // Resize — v6.1: debounced to avoid choking the renderer during drag-resize
+    let resizeTimer = null;
     const onResize = () => {
-      __nebulaRenderer.setSize(window.innerWidth, window.innerHeight);
-      __nebulaMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!__nebulaRenderer || !__nebulaMaterial) return;
+        __nebulaRenderer.setSize(window.innerWidth, window.innerHeight);
+        __nebulaMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+      }, 120);
     };
     window.addEventListener('resize', onResize);
 
@@ -5393,7 +5426,7 @@ async function renderPage(page) {
     case 'ritual': main.innerHTML = await renderRitual(); break;
     case 'settings': main.innerHTML = await renderSettings(); break;
   }
-  lucide.createIcons();
+  lucide.createIcons({ nodes: Array.from(main.querySelectorAll('[data-lucide]')) });  // v6.1: scoped to main only (avoids re-scanning whole document)
   bindPageEvents(page);
   const ids = dreamsCache.map(d=>d.id);
   loadImagesIntoDOM(ids, main);
@@ -5435,6 +5468,11 @@ function animatePageEntrance(page) {
 // ==================== 3D CARD TILT (v6) ====================
 // Mouse-driven perspective tilt on cards — subtle, premium-feeling polish.
 // Only enabled on devices with hover (skipped on touch / reduced-motion).
+// v6.1: Performance-tuned:
+//  - rect is cached per card and invalidated on scroll/resize
+//  - will-change is only set on hover (not permanently — avoids GPU memory overhead)
+//  - cards inside scroll containers are skipped (causes repaint churn)
+//  - the RAF is shared (one raf per active card, but cancelled on leave)
 function setup3DTilt() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   if (window.matchMedia('(hover: none)').matches) return;
@@ -5444,13 +5482,30 @@ function setup3DTilt() {
     if (card.__tiltBound) return;
     card.__tiltBound = true;
     card.style.transformStyle = 'preserve-3d';
-    card.style.willChange = 'transform';
-    const maxTilt = 6; // max degrees
+    // v6.1: do NOT set will-change permanently — only on hover
+    const maxTilt = 6;
     let raf = null;
+    let cachedRect = null;
+    // Invalidate cache on scroll/resize (cheap event count is fine)
+    const invalidate = () => { cachedRect = null; };
+    card.addEventListener('mouseenter', () => {
+      cachedRect = card.getBoundingClientRect();
+      card.style.willChange = 'transform';  // v6.1: set only when needed
+      window.addEventListener('scroll', invalidate, { passive: true, capture: true });
+      window.addEventListener('resize', invalidate, { passive: true });
+    });
+    card.addEventListener('mouseleave', () => {
+      window.removeEventListener('scroll', invalidate, { capture: true });
+      window.removeEventListener('resize', invalidate);
+      if (raf) cancelAnimationFrame(raf);
+      card.style.transform = '';
+      card.style.willChange = '';  // v6.1: clear when not hovering
+      cachedRect = null;
+    });
     const onMove = (e) => {
-      const rect = card.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top) / rect.height;
+      if (!cachedRect) cachedRect = card.getBoundingClientRect();
+      const x = (e.clientX - cachedRect.left) / cachedRect.width;
+      const y = (e.clientY - cachedRect.top) / cachedRect.height;
       const tiltX = (0.5 - y) * maxTilt * 2;
       const tiltY = (x - 0.5) * maxTilt * 2;
       if (raf) cancelAnimationFrame(raf);
@@ -5458,12 +5513,7 @@ function setup3DTilt() {
         card.style.transform = `perspective(900px) rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg) translateZ(0)`;
       });
     };
-    const onLeave = () => {
-      if (raf) cancelAnimationFrame(raf);
-      card.style.transform = '';
-    };
     card.addEventListener('mousemove', onMove, { passive: true });
-    card.addEventListener('mouseleave', onLeave);
   });
 }
 
@@ -5608,7 +5658,8 @@ async function initConstellation3D() {
     });
 
     // === Background parallax star field (3D points) ===
-    const bgCount = 400;
+    // v6.1: cut count on low-power / mobile devices for smoother perf
+    const bgCount = window.__lucidLowPower ? 120 : (window.matchMedia('(max-width: 768px)').matches ? 200 : 400);
     const bgGeom = new THREE.BufferGeometry();
     const bgPos = new Float32Array(bgCount * 3);
     const bgSize = new Float32Array(bgCount);
@@ -5802,13 +5853,18 @@ async function initConstellation3D() {
       }
     });
 
-    // === Resize ===
+    // === Resize — v6.1: debounced ===
+    let resizeTimer = null;
     const onResize = () => {
-      const w = container.clientWidth || W;
-      const h = H;
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const w = container.clientWidth || W;
+        const h = H;
+        if (!renderer) return;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }, 120);
     };
     window.addEventListener('resize', onResize);
 
@@ -8746,6 +8802,7 @@ function closeMildRitual() {
 // Falls back gracefully if Three.js unavailable (CSS orb pseudo-elements remain visible).
 let __orbRenderer = null, __orbScene = null, __orbCamera = null, __orbMaterial = null, __orbRAF = null;
 let __orbAudioAnalyser = null, __orbAudioData = null;
+let __orbVisibilityHandler = null;  // v6.1: for cleanup
 
 async function initRitualOrbShader() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -8948,8 +9005,23 @@ async function initRitualOrbShader() {
         // Subsurface scatter tint (preserved from v5)
         baseCol += navy * 0.1 * (1.0 - diff);
 
-        // Alpha — fully opaque where hit, soft edge
-        float alpha = 1.0;
+        // v6.1: Alpha window for the affirmation text overlay.
+        // The shader canvas sits ABOVE the .ritual-orb-text div in the DOM.
+        // Without this, the opaque sphere would completely cover the text.
+        // We carve a soft radial window in the alpha centered on the sphere,
+        // so the text (positioned at the orb's center) shows through clearly.
+        // Window is tighter when not holding (so the orb looks solid at rest)
+        // and opens up more as charge increases (the affirmation "shines through").
+        vec2 winUv = (vUv - 0.5) * 2.0;  // -1..1
+        float winDist = length(winUv);
+        // Window radius: 0.30 at rest, expands to 0.55 at full charge
+        float winRadius = 0.30 + uCharge * 0.25 + uHolding * 0.05;
+        // Soft falloff
+        float window = smoothstep(winRadius + 0.08, winRadius - 0.05, winDist);
+        // Reduce alpha inside the window — but never to zero (keep a faint tint
+        // so the orb still reads as a glowing sphere, not a hollow ring)
+        float minAlpha = 0.15 + uCharge * 0.10;  // faint translucent core
+        float alpha = mix(minAlpha, 1.0, window);
 
         gl_FragColor = vec4(clamp(baseCol, 0.0, 1.0), alpha);
       }
@@ -8972,9 +9044,15 @@ async function initRitualOrbShader() {
     __orbScene.add(quad);
 
     const clock = new THREE.Clock();
+    // v6.1: pause when tab hidden — saves CPU/GPU when ritual is open in background
+    let orbVisible = true;
+    const onOrbVis = () => { orbVisible = !document.hidden; };
+    document.addEventListener('visibilitychange', onOrbVis);
+    __orbVisibilityHandler = onOrbVis;
     const animate = () => {
       if (!__orbRenderer) return;
       __orbRAF = requestAnimationFrame(animate);
+      if (!orbVisible) return;  // skip rendering when hidden
       __orbMaterial.uniforms.uTime.value = clock.getElapsedTime();
       // Read audio level if analyser available
       if (__orbAudioAnalyser) {
@@ -8998,6 +9076,11 @@ async function initRitualOrbShader() {
 function stopRitualOrbShader() {
   if (__orbRAF) cancelAnimationFrame(__orbRAF);
   __orbRAF = null;
+  // v6.1: remove visibility handler
+  if (__orbVisibilityHandler) {
+    document.removeEventListener('visibilitychange', __orbVisibilityHandler);
+    __orbVisibilityHandler = null;
+  }
   if (__orbRenderer) {
     try { __orbRenderer.dispose(); } catch(e) {}
     __orbRenderer = null;
@@ -9111,14 +9194,17 @@ function updateBreathCue(s) {
 }
 
 // Particle system: drift particles toward orb while holding; burst on completion
+// v6.1: bounded particle pool (max 120), reuse dead slots instead of splicing
 function updateRitualParticles(s) {
   const ctx = s.particleCtx;
   if (!ctx) return;
   const w = s.particleCanvas.width, h = s.particleCanvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  // Spawn particles while holding
-  if (s.holding && s.particles.length < 80) {
+  const MAX_PARTICLES = 120;  // v6.1: hard cap
+
+  // Spawn particles while holding (bounded)
+  if (s.holding && s.particles.length < MAX_PARTICLES) {
     for (let i = 0; i < 2; i++) {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.max(w, h) * 0.6;
@@ -9140,7 +9226,9 @@ function updateRitualParticles(s) {
   const cx = orbRect.left + orbRect.width / 2;
   const cy = orbRect.top + orbRect.height / 2;
 
-  for (let i = s.particles.length - 1; i >= 0; i--) {
+  // v6.1: in-place compaction instead of splicing (avoids array realloc per frame)
+  let writeIdx = 0;
+  for (let i = 0; i < s.particles.length; i++) {
     const p = s.particles[i];
     if (s.completed) {
       // Explosion: push outward
@@ -9162,7 +9250,7 @@ function updateRitualParticles(s) {
       // Absorb when close
       if (d < 60) p.life -= 0.05;
     }
-    if (p.life <= 0) { s.particles.splice(i, 1); continue; }
+    if (p.life <= 0) continue;  // v6.1: skip dead particle (don't write to compaction slot)
 
     const color = p.hue === 'gold' ? '245,217,122' : '159,234,232';
     ctx.fillStyle = `rgba(${color},${p.life * 0.7})`;
@@ -9174,7 +9262,11 @@ function updateRitualParticles(s) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, Math.max(0.1, p.size * p.life * 3), 0, Math.PI * 2);
     ctx.fill();
+    // v6.1: keep the particle by writing it to the compaction slot
+    s.particles[writeIdx++] = p;
   }
+  // Truncate the array to the compacted length
+  s.particles.length = writeIdx;
 }
 
 async function completeRitual() {
@@ -9262,17 +9354,32 @@ function setupMagneticButtons() {
   if (window.matchMedia('(hover: none)').matches) return; // skip on touch
   const buttons = document.querySelectorAll('.btn-primary, .btn-gold, .quick-log-fab');
   buttons.forEach(btn => {
+    if (btn.__magneticBound) return;  // v6.1: avoid double-binding
+    btn.__magneticBound = true;
     btn.setAttribute('data-magnetic', '');
-    btn.addEventListener('mousemove', e => {
-      const rect = btn.getBoundingClientRect();
-      const x = e.clientX - rect.left - rect.width / 2;
-      const y = e.clientY - rect.top - rect.height / 2;
-      const strength = 0.25;
-      btn.style.transform = `translate(${x * strength}px, ${y * strength}px)`;
+    // v6.1: cache rect per hover; only set will-change while hovered
+    let cachedRect = null;
+    let raf = null;
+    btn.addEventListener('mouseenter', () => {
+      cachedRect = btn.getBoundingClientRect();
+      btn.style.willChange = 'transform';
     });
     btn.addEventListener('mouseleave', () => {
+      if (raf) cancelAnimationFrame(raf);
       btn.style.transform = '';
+      btn.style.willChange = '';
+      cachedRect = null;
     });
+    btn.addEventListener('mousemove', e => {
+      if (!cachedRect) cachedRect = btn.getBoundingClientRect();
+      const x = e.clientX - cachedRect.left - cachedRect.width / 2;
+      const y = e.clientY - cachedRect.top - cachedRect.height / 2;
+      const strength = 0.25;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        btn.style.transform = `translate(${(x * strength).toFixed(2)}px, ${(y * strength).toFixed(2)}px)`;
+      });
+    }, { passive: true });
   });
 }
 
@@ -9316,8 +9423,33 @@ async function loadImageGenCustomizations() {
   window.__customNegativePrompt = await getSetting('customNegativePrompt', '');
 }
 // ==================== INIT ====================
+// v6.1: Wait for deferred vendor scripts (idb, lucide, gsap, Tone) to be ready.
+// Because we tag those scripts with `defer`, they parse after HTML but the
+// DOMContentLoaded event can fire before they've executed. We need idb + lucide
+// before init() can run.
+function waitForVendorScripts(timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      if (typeof window.idb !== 'undefined' && typeof window.lucide !== 'undefined') {
+        resolve(true);
+        return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        console.warn('Vendor scripts (idb/lucide) timed out — proceeding anyway');
+        resolve(false);
+      }
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
 async function init() {
-  createStarField();
+  await waitForVendorScripts();
+  // v6.1: Lazy-init nebula AFTER first paint so the page renders instantly.
+  // The nebula is decorative; the user shouldn't wait on it.
+  requestIdleCallbackSafe(createStarField, { timeout: 1500 });
   await openDB();
   await migrateFromLocalStorage();
   await refreshCache();
@@ -9342,6 +9474,15 @@ async function init() {
     } else {
       scheduleInAppRCReminders(opt, rcSetup.frequency);
     }
+  }
+}
+
+// v6.1: Safe wrapper for requestIdleCallback (with timeout fallback)
+function requestIdleCallbackSafe(fn, opts = {}) {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: opts.timeout || 2000 });
+  } else {
+    setTimeout(fn, opts.timeout ? Math.min(opts.timeout, 200) : 200);
   }
 }
 
