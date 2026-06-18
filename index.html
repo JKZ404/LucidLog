@@ -241,10 +241,46 @@ if (window.__webgpuSupported) console.log('%c[LucidLog v6] WebGPU available — 
 /* ========== RESET ========== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+/* v6.2: touch-action: manipulation removes the legacy 300ms tap delay on iOS
+   and double-tap-to-zoom gesture, making taps feel instant. */
+html, body { touch-action: manipulation; }
+/* v6.2: but restore pan/zoom on inputs (so text fields still scroll-select) */
+input, textarea, select { touch-action: auto; }
+/* v6.2: neutralise "sticky hover" on touch devices.
+   On mobile, :hover styles stay applied after tap until next tap elsewhere,
+   making the UI feel broken. We disable hover-triggered transforms on touch.
+   Active state (.btn:active) still provides tap feedback. */
+@media (hover: none) {
+  .btn-primary:hover, .btn-secondary:hover, .btn-danger:hover,
+  .dream-sign-chip:hover, .chip:hover,
+  .dream-entry-card:hover, .dream-entry-card:hover::before,
+  .dream-entry-card:hover .dream-thumb, .dream-entry-card:hover .dream-thumb img,
+  .recurring-card:hover, .rc-card:hover .rc-illustration,
+  .style-picker-card:hover, .gallery-generate-btn:hover,
+  .dream-gallery-thumb:hover, .dream-gallery-add:hover,
+  .dream-banner:hover, .lightbox-close:hover,
+  .sidebar-nav a:hover {
+    transform: none !important;
+  }
+}
+/* v6.2: ensure :active tap feedback is visible on touch (more aggressive scale) */
+@media (hover: none) and (pointer: coarse) {
+  .btn-primary:active, .btn-secondary:active, .btn-gold:active,
+  .chip:active, .dream-sign-chip:active, .recurring-card:active,
+  .dream-entry-card:active, .rc-card:active, .style-picker-card:active,
+  .sidebar-nav a:active, .bottom-nav a:active {
+    transform: scale(0.96) !important;
+    transition: transform 80ms ease-out !important;
+  }
+}
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg); color: var(--text); line-height: 1.6;
   min-height: 100dvh; overflow-x: hidden;
+  /* v6.2: prevent overscroll-bounce from causing layout jank on iOS */
+  overscroll-behavior-y: none;
+  /* v6.2: -webkit-tap-highlight-color: transparent removes the gray tap flash on iOS */
+  -webkit-tap-highlight-color: transparent;
 }
 h1,h2,h3,h4 { font-family: 'Lora', Georgia, serif; font-weight: 600; line-height: 1.25; }
 h1 { font-size: 2rem; } h2 { font-size: 1.5rem; } h3 { font-size: 1.2rem; }
@@ -1621,6 +1657,8 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   display: flex; align-items: center; gap: 12px; padding: 11px 16px;
   border-radius: var(--radius-sm); color: var(--muted); font-weight: 500;
   transition: all var(--transition); font-size: 0.93rem;
+  /* v6.2: needed for ripple containment */
+  position: relative; overflow: hidden;
 }
 .sidebar-nav a:hover {
   color: var(--text);
@@ -1649,6 +1687,9 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 8px 0; color: var(--muted); font-size: 0.62rem; font-weight: 600;
   transition: color var(--transition); flex: 1; text-align: center; letter-spacing: 0.02em;
+  /* v6.2: needed for ripple containment + tap feedback */
+  position: relative; overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 .bottom-nav a.active { color: var(--accent); }
 .bottom-nav a i { width: 22px; height: 22px; }
@@ -2148,6 +2189,292 @@ h1:hover { font-weight: 700; letter-spacing: -0.005em; }
   font-size: 0.82rem; color: var(--muted); line-height: 1.6; margin-top: 12px;
 }
 .wbtb-info strong { color: var(--accent); }
+
+/* ========== v6.3 ENHANCED RITUAL SYSTEM ========== */
+/* Pre-ritual preparation checklist */
+.ritual-prep-checklist {
+  display: flex; flex-direction: column; gap: 8px; margin: 16px 0;
+}
+.ritual-prep-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: rgba(21,34,56,0.5); border: 1px solid rgba(159,234,232,0.12);
+  border-radius: var(--radius-sm); font-size: 0.88rem;
+  transition: all var(--dur-fast, 180ms) var(--ease-smooth, ease);
+}
+.ritual-prep-item.pass {
+  background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.25);
+}
+.ritual-prep-item.warn {
+  background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.25);
+}
+.ritual-prep-item.fail {
+  background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.2);
+}
+.ritual-prep-item .prep-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 0.8rem;
+}
+.ritual-prep-item.pass .prep-icon { background: rgba(52,211,153,0.2); color: var(--success); }
+.ritual-prep-item.warn .prep-icon { background: rgba(251,191,36,0.2); color: var(--warning); }
+.ritual-prep-item.fail .prep-icon { background: rgba(248,113,113,0.18); color: var(--danger); }
+.ritual-prep-item .prep-text { flex: 1; line-height: 1.4; }
+.ritual-prep-item .prep-text strong { color: var(--text); }
+.ritual-prep-item .prep-text .prep-detail { color: var(--muted); font-size: 0.78rem; display: block; margin-top: 2px; }
+
+/* Effectiveness stats on ritual page */
+.ritual-effectiveness {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin: 20px 0;
+}
+.ritual-effect-card {
+  padding: 14px 16px; background: linear-gradient(135deg, rgba(21,34,56,0.6) 0%, rgba(13,27,42,0.4) 100%);
+  border: 1px solid rgba(159,234,232,0.15); border-radius: var(--radius-sm);
+  text-align: center;
+}
+.ritual-effect-card .effect-val {
+  font-family: 'Lora', serif; font-size: 1.6rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1; margin-bottom: 4px;
+}
+.ritual-effect-card .effect-label {
+  font-size: 0.72rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Multi-phase guided ritual overlay (v6.3) */
+.ritual-phase-tracker {
+  position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; z-index: 5;
+}
+.ritual-phase-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(159,234,232,0.2);
+  transition: all 0.4s var(--ease-smooth, ease);
+}
+.ritual-phase-dot.active {
+  background: var(--accent-bright); box-shadow: 0 0 12px rgba(159,234,232,0.6);
+  width: 24px; border-radius: 4px;
+}
+.ritual-phase-dot.done { background: var(--accent); }
+
+/* Visualization phase: dream replay text */
+.ritual-visualization {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 40px 28px;
+  z-index: 4; pointer-events: none; text-align: center;
+}
+.ritual-visualization .viz-prompt {
+  font-family: 'Lora', serif; font-size: 1.05rem; color: var(--accent-bright);
+  font-style: italic; max-width: 480px; line-height: 1.7;
+  text-shadow: 0 0 16px rgba(13,27,42,0.9), 0 2px 8px rgba(13,27,42,0.8);
+  opacity: 0; transition: opacity 0.8s ease;
+}
+.ritual-visualization .viz-prompt.visible { opacity: 1; }
+.ritual-visualization .viz-dream-title {
+  font-family: 'Lora', serif; font-size: 1.3rem; color: var(--gold-bright);
+  margin-bottom: 12px; font-weight: 600;
+  text-shadow: 0 0 16px rgba(13,27,42,0.95);
+  opacity: 0; transition: opacity 0.8s ease;
+}
+.ritual-visualization .viz-dream-title.visible { opacity: 1; }
+.ritual-visualization .viz-dream-snippet {
+  font-size: 0.92rem; color: var(--text); max-width: 460px; line-height: 1.7;
+  margin-bottom: 18px; opacity: 0; transition: opacity 0.8s ease 0.3s;
+  text-shadow: 0 0 12px rgba(13,27,42,0.95);
+}
+.ritual-visualization .viz-dream-snippet.visible { opacity: 0.85; }
+
+/* SSILD phase: sense-cycling indicator */
+.ritual-ssild-sense {
+  position: absolute; bottom: 28%; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  z-index: 4; pointer-events: none;
+}
+.ritual-ssild-sense .sense-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(159,234,232,0.18) 0%, rgba(159,234,232,0.04) 70%, transparent 100%);
+  border: 1px solid rgba(159,234,232,0.3);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+.ritual-ssild-sense .sense-icon i { width: 32px; height: 32px; color: var(--accent-bright); }
+.ritual-ssild-sense .sense-name {
+  font-family: 'Lora', serif; font-size: 1.1rem; color: var(--accent-bright);
+  text-shadow: 0 0 12px rgba(13,27,42,0.9);
+}
+.ritual-ssild-sense .sense-cycles {
+  font-size: 0.78rem; color: var(--muted); letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Voice recording UI */
+.ritual-voice-controls {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  flex-wrap: wrap;
+}
+.ritual-voice-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: var(--radius-pill);
+  background: rgba(159,234,232,0.1); border: 1px solid rgba(159,234,232,0.3);
+  color: var(--accent); font-size: 0.78rem; cursor: pointer;
+  transition: all var(--dur-fast, 180ms) var(--ease-smooth, ease);
+}
+.ritual-voice-btn:hover { background: rgba(159,234,232,0.18); }
+.ritual-voice-btn.recording {
+  background: rgba(248,113,113,0.18); border-color: var(--danger); color: var(--danger);
+  animation: pulseGlow 1.2s ease-in-out infinite;
+}
+.ritual-voice-btn.playing {
+  background: rgba(245,217,122,0.18); border-color: var(--gold); color: var(--gold-bright);
+}
+
+/* WBTB mini-ritual overlay (after waking from WBTB alarm) */
+.wbtb-mini-ritual {
+  position: fixed; inset: 0; z-index: 350;
+  background: radial-gradient(ellipse at center, rgba(13,27,42,0.96) 0%, rgba(7,15,25,0.99) 100%);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px; animation: ritualFadeIn 0.6s var(--ease-out-expo);
+  text-align: center;
+}
+.wbtb-mini-ritual .wbtb-title {
+  font-family: 'Lora', serif; font-size: 1.5rem; color: var(--accent-bright);
+  margin-bottom: 8px;
+}
+.wbtb-mini-ritual .wbtb-subtitle {
+  font-size: 0.92rem; color: var(--muted); max-width: 480px;
+  line-height: 1.6; margin-bottom: 28px;
+}
+.wbtb-mini-ritual .wbtb-intention-display {
+  font-family: 'Lora', serif; font-style: italic; font-size: 1.1rem;
+  color: var(--gold-bright); max-width: 420px; line-height: 1.7;
+  padding: 20px; margin-bottom: 28px;
+  background: rgba(245,217,122,0.06); border: 1px solid rgba(245,217,122,0.2);
+  border-radius: var(--radius);
+}
+.wbtb-mini-ritual .wbtb-actions {
+  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+}
+.wbtb-mini-ritual .wbtb-options {
+  margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(159,234,232,0.15);
+  width: 100%; max-width: 480px;
+}
+.wbtb-mini-ritual .wbtb-options h4 {
+  font-size: 0.9rem; color: var(--muted); margin-bottom: 12px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.wbtb-mini-ritual .wbtb-options-list {
+  display: flex; flex-direction: column; gap: 8px; text-align: left;
+}
+.wbtb-mini-ritual .wbtb-option {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  background: rgba(21,34,56,0.5); border-radius: var(--radius-sm);
+  font-size: 0.84rem; color: var(--text); line-height: 1.5;
+}
+.wbtb-mini-ritual .wbtb-option i {
+  width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; margin-top: 2px;
+}
+
+/* Morning follow-through modal */
+.morning-check-modal {
+  position: fixed; inset: 0; z-index: 340;
+  background: rgba(13,27,42,0.85); backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: fadeIn 0.4s ease;
+}
+.morning-check-card {
+  max-width: 460px; width: 100%;
+  background: linear-gradient(135deg, rgba(21,34,56,0.95) 0%, rgba(13,27,42,0.95) 100%);
+  border: 1px solid rgba(159,234,232,0.25); border-radius: var(--radius-xl);
+  padding: 32px 28px; text-align: center;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 32px rgba(159,234,232,0.1);
+}
+.morning-check-card .morning-icon {
+  width: 64px; height: 64px; margin: 0 auto 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle, rgba(245,217,122,0.2) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.morning-check-card .morning-icon i { width: 36px; height: 36px; color: var(--gold-bright); }
+.morning-check-card h2 {
+  font-size: 1.4rem; margin-bottom: 8px; color: var(--text);
+}
+.morning-check-card .morning-subtitle {
+  font-size: 0.9rem; color: var(--muted); margin-bottom: 24px; line-height: 1.5;
+}
+.morning-check-card .morning-question {
+  font-family: 'Lora', serif; font-size: 1.1rem; color: var(--accent-bright);
+  margin-bottom: 20px; font-style: italic;
+}
+.morning-check-card .morning-actions {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.morning-check-card .morning-btn {
+  padding: 14px 20px; border-radius: var(--radius-sm); font-weight: 600;
+  font-size: 0.95rem; cursor: pointer; border: 1px solid transparent;
+  transition: all var(--dur-fast, 180ms) var(--ease-smooth, ease);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.morning-check-card .morning-btn-primary {
+  background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 100%);
+  color: #0D1B2A;
+}
+.morning-check-card .morning-btn-secondary {
+  background: rgba(159,234,232,0.1); color: var(--accent); border-color: rgba(159,234,232,0.3);
+}
+.morning-check-card .morning-btn-tertiary {
+  background: transparent; color: var(--muted); font-size: 0.84rem; padding: 8px;
+}
+
+/* Technique combination badges */
+.technique-badges {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+}
+.technique-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+  background: rgba(159,234,232,0.12); color: var(--accent);
+  border: 1px solid rgba(159,234,232,0.25);
+}
+.technique-badge.mild { background: rgba(159,234,232,0.18); color: var(--accent-bright); }
+.technique-badge.wbtb { background: rgba(245,217,122,0.15); color: var(--gold-bright); border-color: rgba(245,217,122,0.3); }
+.technique-badge.ssild { background: rgba(183,148,244,0.15); color: var(--violet); border-color: rgba(183,148,244,0.3); }
+.technique-badge.rc { background: rgba(52,211,153,0.12); color: var(--success); border-color: rgba(52,211,153,0.25); }
+.technique-badge.viz { background: rgba(248,113,113,0.12); color: var(--rose); border-color: rgba(248,113,113,0.25); }
+
+/* Drift phase: subtle hypnagogic imagery prompt */
+.ritual-drift-prompt {
+  position: absolute; bottom: 18%; left: 50%; transform: translateX(-50%);
+  max-width: 420px; text-align: center; z-index: 4; pointer-events: none;
+  opacity: 0; transition: opacity 1s ease;
+}
+.ritual-drift-prompt.visible { opacity: 1; }
+.ritual-drift-prompt .drift-text {
+  font-family: 'Lora', serif; font-style: italic; font-size: 0.95rem;
+  color: var(--muted); line-height: 1.7;
+  text-shadow: 0 0 12px rgba(13,27,42,0.95);
+}
+
+@media (max-width: 768px) {
+  .ritual-visualization .viz-prompt { font-size: 0.95rem; max-width: 320px; }
+  .ritual-visualization .viz-dream-title { font-size: 1.1rem; }
+  .ritual-visualization .viz-dream-snippet { font-size: 0.84rem; max-width: 300px; }
+  .ritual-ssild-sense .sense-icon { width: 56px; height: 56px; }
+  .ritual-ssild-sense .sense-icon i { width: 24px; height: 24px; }
+  .ritual-ssild-sense .sense-name { font-size: 0.95rem; }
+  .wbtb-mini-ritual .wbtb-title { font-size: 1.2rem; }
+  .wbtb-mini-ritual .wbtb-subtitle { font-size: 0.84rem; }
+  .morning-check-card { padding: 24px 20px; }
+  .morning-check-card h2 { font-size: 1.2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ritual-ssild-sense .sense-icon { animation: none; }
+  .ritual-phase-dot { transition: none; }
+}
 
 /* ========== CONSTELLATION VIEW (legacy block — merged into v5 above) ========== */
 /* Tooltip styles consolidated in v5 block above to avoid conflicts. */
@@ -2880,12 +3207,15 @@ let currentJournalFilter = 'all';
 let currentJournalSearch = '';
 let currentJournalTag = null;
 
+let __cacheVersion = 0;  // v6.2: bumped on every refreshCache so callers can detect changes
+
 async function refreshCache() {
   dreamsCache = await getAllDreams();
   bookmarksCache = await getAllBookmarks();
   recurringCache = await getAllRecurring();
   rcLogCache = await getAllRCLog();
   sleepLogCache = await getAllSleepLogs();
+  __cacheVersion++;  // v6.2: signal that cache was refreshed
 }
 
 // ==================== LIVING BACKGROUND (v5) ====================
@@ -3762,7 +4092,10 @@ function moonPhaseHero3D(sz=140) {
 
 async function initHeroMoon3D(canvasId) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  if (window.__lucidLowPower) return;
+  // v6.2: removed __lucidLowPower gate — the moon is a small 280x280 canvas
+  // and runs fine on any modern phone. The gate was preventing the moon from
+  // appearing on most mobile devices (which match the old "low-power" heuristic).
+  // Heavy effects (full-screen nebula, 400-star 3D constellation) still respect the gate.
   if (typeof window.THREE === 'undefined') {
     try { window.THREE = await import('three'); } catch (e) { return; }
   }
@@ -3775,12 +4108,17 @@ async function initHeroMoon3D(canvasId) {
   canvas.__moonInit = true;
 
   try {
+    // v6.2: cap pixel ratio at 2 on mobile to avoid iOS backing-store limits.
+    // Anti-aliasing stays ON even on mobile — the moon is a small canvas
+    // (~420x420 backing store at DPR 3) and needs AA to look smooth.
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const maxRatio = isMobile ? 2 : 2;
     const renderer = new THREE.WebGLRenderer({
       canvas, antialias: true, alpha: true, premultipliedAlpha: false,
       powerPreference: 'high-performance',
     });
     const size = canvas.width;  // square
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxRatio));
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
 
@@ -5390,51 +5728,84 @@ async function renderPage(page) {
   // v6: stop any active 3D hero moons from the previous page
   if (window.__currentConstellation3D) { window.__currentConstellation3D.stop(); window.__currentConstellation3D = null; }
   stopAllHeroMoons();
-  main.innerHTML = renderSkeleton();
-  await refreshCache();
-  switch(page) {
-    case 'dashboard':
-      main.innerHTML = renderDashboard();
-      // Animate stat counters (read targets from data-count attribute)
-      setTimeout(() => {
-        main.querySelectorAll('.dash-stats .stat-card[data-count]').forEach(card => {
-          const valEl = card.querySelector('.stat-value');
-          const target = parseFloat(card.dataset.count);
-          if (valEl && !isNaN(target)) animateCounter(valEl, target, 1000);
-        });
-      }, 100);
-      // v6: init 3D hero moon (async, non-blocking; falls back to SVG)
-      setTimeout(() => {
-        const moonCanvas = main.querySelector('.hero-moon-3d-canvas');
-        if (moonCanvas && moonCanvas.id) initHeroMoon3D(moonCanvas.id);
-      }, 200);
-      break;
-    case 'journal': main.innerHTML = renderJournal(); break;
-    case 'reality-check': main.innerHTML = renderRealityCheck(); break;
-    case 'library': main.innerHTML = renderLibrary(); break;
-    case 'sleep': main.innerHTML = await renderSleep(); break;
-    case 'sleep-tracker': main.innerHTML = await renderSleepTracker(); break;
-    case 'constellation':
-      main.innerHTML = renderConstellation();
-      // v6: upgrade to 3D constellation if Three.js available
-      setTimeout(() => initConstellation3D(), 100);
-      break;
-    case 'stats': main.innerHTML = renderStats(); break;
-    case 'dictionary': main.innerHTML = renderDictionary(); break;
-    case 'challenges': main.innerHTML = await renderChallenges(); break;
-    case 'recurring': main.innerHTML = renderRecurring(); break;
-    case 'ritual': main.innerHTML = await renderRitual(); break;
-    case 'settings': main.innerHTML = await renderSettings(); break;
+  // v6.2: render IMMEDIATELY using existing cache (don't block on refreshCache).
+  // This makes taps feel instant. If cache is stale, we re-render after refresh.
+  // The skeleton loader was making every tap feel laggy on mobile.
+  const cacheVersionBefore = __cacheVersion || 0;
+  renderPageInner(page);
+  // Now refresh cache in the background; if data changed, re-render
+  refreshCache().then(() => {
+    const cacheVersionAfter = __cacheVersion || 0;
+    if (cacheVersionAfter !== cacheVersionBefore && currentPage === page) {
+      renderPageInner(page);
+    }
+  });
+}
+
+// v6.2: renderPageInner does the actual rendering without waiting on cache.
+// For async renderers, we render a skeleton first then swap to real content
+// when the async render resolves. This keeps taps feeling instant.
+function renderPageInner(page) {
+  const main = document.getElementById('mainContent');
+  const syncRenderers = {
+    'dashboard': renderDashboard,
+    'journal': renderJournal,
+    'reality-check': renderRealityCheck,
+    'library': renderLibrary,
+    'stats': renderStats,
+    'dictionary': renderDictionary,
+    'recurring': renderRecurring,
+  };
+  const asyncRenderers = {
+    'sleep': renderSleep,
+    'sleep-tracker': renderSleepTracker,
+    'challenges': renderChallenges,
+    'ritual': renderRitual,
+    'settings': renderSettings,
+  };
+  if (syncRenderers[page]) {
+    main.innerHTML = syncRenderers[page]();
+    afterPageRender(page, main);
+  } else if (asyncRenderers[page]) {
+    // Show skeleton immediately, swap when async resolves
+    main.innerHTML = renderSkeleton();
+    asyncRenderers[page]().then(html => {
+      // Only swap if user is still on the same page
+      if (currentPage === page) {
+        main.innerHTML = html;
+        afterPageRender(page, main);
+      }
+    });
   }
-  lucide.createIcons({ nodes: Array.from(main.querySelectorAll('[data-lucide]')) });  // v6.1: scoped to main only (avoids re-scanning whole document)
+  // Constellation has a special init flow
+  if (page === 'constellation') {
+    main.innerHTML = renderConstellation();
+    afterPageRender(page, main);
+    requestAnimationFrame(() => initConstellation3D());
+  }
+  // Dashboard has special post-init for counters + moon
+  if (page === 'dashboard') {
+    requestAnimationFrame(() => {
+      main.querySelectorAll('.dash-stats .stat-card[data-count]').forEach(card => {
+        const valEl = card.querySelector('.stat-value');
+        const target = parseFloat(card.dataset.count);
+        if (valEl && !isNaN(target)) animateCounter(valEl, target, 1000);
+      });
+      const moonCanvas = main.querySelector('.hero-moon-3d-canvas');
+      if (moonCanvas && moonCanvas.id) initHeroMoon3D(moonCanvas.id);
+    });
+  }
+}
+
+// v6.2: extracted post-render hook (lucide icons, events, images, tilt, charts, GSAP)
+function afterPageRender(page, main) {
+  lucide.createIcons({ nodes: Array.from(main.querySelectorAll('[data-lucide]')) });
   bindPageEvents(page);
   const ids = dreamsCache.map(d=>d.id);
   loadImagesIntoDOM(ids, main);
   setupMagneticButtons();
-  // v6: 3D card tilt + chart enhancements
   setup3DTilt();
   enhanceCharts();
-  // GSAP-powered staggered entrance for cards (graceful fallback if GSAP missing)
   animatePageEntrance(page);
 }
 
@@ -5922,9 +6293,13 @@ function animateModalEntrance(modalEl) {
   if (typeof gsap === 'undefined' || !modalEl) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   try {
+    // v6.2: faster on mobile (250ms) so modals feel instant; keep desktop at 500ms
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const duration = isMobile ? 0.25 : 0.5;
+    const ease = isMobile ? 'power3.out' : 'back.out(1.4)';
     gsap.fromTo(modalEl,
-      { opacity: 0, scale: 0.92, y: 20 },
-      { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(1.4)', clearProps: 'transform' }
+      { opacity: 0, scale: isMobile ? 0.96 : 0.92, y: isMobile ? 12 : 20 },
+      { opacity: 1, scale: 1, y: 0, duration, ease, clearProps: 'transform' }
     );
   } catch (e) {}
 }
@@ -6785,21 +7160,66 @@ async function renderRitual() {
   const existingIntention = await getIntention(today);
   const defaultIntention = 'Tonight I will recognise that I am dreaming.';
   const intention = existingIntention ? existingIntention.text : defaultIntention;
-  const rcSetup = await getSetting('rcNotifSetup', { technique: 'fingers', frequency: 5, enabled: false });
   const ritualTime = await getSetting('ritualTime', '22:00');
   const bedtime = await getSetting('sleepSchedule', { bedtime: '23:00', waketime: '07:00' });
   const tonightLog = await getRitualLog(today);
   const alreadyCompletedToday = tonightLog && tonightLog.completedAt;
+  const prepItems = await buildRitualPrepChecklist();
+  const effectiveness = await getRitualEffectiveness();
+  const hasVoiceIntention = await getSetting('ritualVoiceIntention', null);
 
   // Calculate WBTB time: 5h30m from now
   const now = new Date();
   const wbtbTime = new Date(now.getTime() + 5.5 * 3600000);
   const wbtbStr = wbtbTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
+  // Count passing prep items
+  const passCount = prepItems.filter(i => i.status === 'pass').length;
+  const prepScore = Math.round((passCount / prepItems.length) * 100);
+
   return `<div class="page ritual-container">
     <div class="ritual-mist-bg"></div>
     <h1 style="margin-bottom:6px;position:relative;">Evening Ritual</h1>
-    <p class="text-muted" style="margin-bottom:28px;max-width:560px;position:relative;">Prepare your mind for lucid dreaming with this three-step pre-sleep flow. Consistency is the key to success.</p>
+    <p class="text-muted" style="margin-bottom:20px;max-width:560px;position:relative;">A 7-phase pre-sleep protocol combining every proven lucid dream induction technique. Used nightly, this ritual produces lucid dreams in the majority of practitioners within 2-4 weeks.</p>
+
+    ${effectiveness.trackedDays > 0 ? `
+      <div class="card" style="margin-bottom:16px;padding:20px;position:relative;">
+        <h3 style="margin-bottom:12px;font-size:1rem;">Your Effectiveness</h3>
+        <div class="ritual-effectiveness">
+          <div class="ritual-effect-card">
+            <div class="effect-val">${effectiveness.successRate}%</div>
+            <div class="effect-label">Lucid nights</div>
+          </div>
+          <div class="ritual-effect-card">
+            <div class="effect-val">${effectiveness.lucidNights}</div>
+            <div class="effect-label">Lucid after ritual</div>
+          </div>
+          <div class="ritual-effect-card">
+            <div class="effect-val">${effectiveness.trackedDays}</div>
+            <div class="effect-label">Nights tracked</div>
+          </div>
+          <div class="ritual-effect-card">
+            <div class="effect-val">${effectiveness.completed}</div>
+            <div class="effect-label">Rituals done</div>
+          </div>
+        </div>
+        ${effectiveness.wbtbBoost > 0 ? `<p class="text-muted" style="font-size:0.8rem;margin-top:8px;"><strong style="color:var(--gold-bright);">${effectiveness.wbtbBoost}%</strong> of your lucid nights followed a WBTB cycle.</p>` : ''}
+      </div>
+    ` : ''}
+
+    <div class="card ritual-step" style="position:relative;">
+      <div class="step-num">Pre-Ritual Check</div>
+      <h3 style="margin-bottom:6px;">Readiness: ${prepScore}%</h3>
+      <p class="text-muted" style="margin-bottom:14px;font-size:0.88rem;line-height:1.6;">Your mind and environment primed for the ritual. Green items are good; yellow items could be improved.</p>
+      <div class="ritual-prep-checklist">
+        ${prepItems.map(item => `
+          <div class="ritual-prep-item ${item.status}">
+            <div class="prep-icon"><i data-lucide="${item.icon}"></i></div>
+            <div class="prep-text">${item.text}<span class="prep-detail">${item.detail}</span></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
 
     <div class="card ritual-step" style="position:relative;">
       <div class="step-num">Step 1</div>
@@ -6810,27 +7230,37 @@ async function renderRitual() {
 
     <div class="card ritual-step" style="position:relative;">
       <div class="step-num">Step 2</div>
-      <h3 style="margin-bottom:10px;">Charge Your MILD Intention</h3>
-      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">Write your affirmation, then hold the orb to charge it. The ritual combines breath, vibration, and focus to imprint the intention on your dreaming mind.</p>
+      <h3 style="margin-bottom:10px;">Set Your MILD Intention</h3>
+      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">Write a single, vivid sentence. The 7-phase ritual will guide you through settling, recall, SSILD, visualization, charging, anchoring, and drifting into sleep.</p>
       <textarea class="ritual-intention-input" id="ritualIntention" rows="2">${escapeHtml(intention)}</textarea>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap;">
+      <div class="ritual-voice-controls">
+        <button class="ritual-voice-btn" id="voiceRecordBtn" onclick="toggleVoiceRecording(this)">
+          <i data-lucide="mic" style="width:14px;height:14px;"></i>
+          <span>${hasVoiceIntention ? 'Re-record' : 'Record voice'}</span>
+        </button>
+        ${hasVoiceIntention ? `<button class="ritual-voice-btn" id="voicePlayBtn" onclick="toggleVoicePlayback(this)">
+          <i data-lucide="play" style="width:14px;height:14px;"></i>
+          <span>Play recording</span>
+        </button>` : ''}
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="saveIntention()">Save text</button>
-        <button class="btn btn-primary" onclick="startMildRitualFromPage()" style="background:linear-gradient(135deg, var(--accent-bright), var(--gold));color:#0D1B2A;font-weight:700;padding:10px 24px;">
-          <i data-lucide="sparkles" style="width:16px;height:16px;"></i> Begin Ritual
+        <button class="btn btn-primary" onclick="startMildRitualFromPage()" style="background:linear-gradient(135deg, var(--accent-bright), var(--gold));color:#0D1B2A;font-weight:700;padding:12px 28px;">
+          <i data-lucide="sparkles" style="width:16px;height:16px;"></i> Begin 7-Phase Ritual
         </button>
       </div>
-      ${alreadyCompletedToday ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--success);display:flex;align-items:center;gap:8px;"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Ritual completed tonight at ${new Date(alreadyCompletedToday).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${tonightLog.durationSec}s held</div>` : ''}
+      ${alreadyCompletedToday ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:var(--radius-sm);font-size:0.82rem;color:var(--success);display:flex;align-items:center;gap:8px;"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Ritual completed tonight at ${new Date(alreadyCompletedToday).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${tonightLog.durationSec}s · ${tonightLog.phasesCompleted || 7}/7 phases${tonightLog.wbtbCompleted ? ' · WBTB ✓' : ''}</div>` : ''}
     </div>
 
     <div class="card ritual-step" style="position:relative;">
       <div class="step-num">Step 3</div>
-      <h3 style="margin-bottom:10px;">WBTB Alarm</h3>
-      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">Set an alarm for approximately 5 hours 30 minutes from now to wake during a peak REM window, then return to bed with lucid intention.</p>
+      <h3 style="margin-bottom:10px;">WBTB Alarm (Auto-set on completion)</h3>
+      <p class="text-muted" style="margin-bottom:14px;font-size:0.9rem;line-height:1.7;">When you complete the ritual, a WBTB alarm is automatically scheduled for ~5h 30m later — your peak REM window. You'll be woken gently with chimes, given a 90-second intention recharge, then sent back to sleep. WBTB combined with MILD produces the highest known lucid dream success rates.</p>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
         <div style="font-family:'Lora',serif;font-size:1.6rem;color:var(--accent);">${wbtbStr}</div>
-        <button class="btn btn-secondary btn-sm" onclick="setWBTBAlarm()">Set WBTB Alarm</button>
+        <button class="btn btn-secondary btn-sm" onclick="setWBTBAlarm()">Set manual alarm instead</button>
       </div>
-      <div class="wbtb-info"><strong>Note:</strong> WBTB alarm uses the Notification API with a timed delay. If you close this tab before the alarm fires, the notification will not appear unless a service worker is active in the background. For reliable background delivery, install the app as a PWA over HTTPS.</div>
+      <div class="wbtb-info"><strong>The 7 phases:</strong> Settling (30s) → Recalling (25s) → SSILD sensing (60s) → Visualizing (45s) → Charging (30s) → Anchoring (20s) → Drifting (20s). Total ~4 minutes. The WBTB mini-ritual adds another 90s when you wake.</div>
     </div>
   </div>`;
 }
@@ -6844,6 +7274,49 @@ async function startMildRitualFromPage() {
     await putIntention({ date: today, text, createdAt: Date.now() });
   }
   await openMildRitual();
+}
+
+// v6.3: Voice recording toggle (called from ritual page button)
+async function toggleVoiceRecording(btn) {
+  if (__voiceRecording && __voiceRecording.state === 'recording') {
+    stopVoiceRecording();
+    btn.classList.remove('recording');
+    btn.querySelector('span').textContent = 'Re-record';
+    btn.querySelector('i').setAttribute('data-lucide', 'mic');
+    lucide.createIcons({ nodes: [btn] });
+  } else {
+    const ok = await startVoiceRecording();
+    if (ok) {
+      btn.classList.add('recording');
+      btn.querySelector('span').textContent = 'Stop recording';
+      btn.querySelector('i').setAttribute('data-lucide', 'square');
+      lucide.createIcons({ nodes: [btn] });
+    }
+  }
+}
+
+async function toggleVoicePlayback(btn) {
+  if (__voiceAudioEl && !__voiceAudioEl.paused) {
+    stopVoiceIntention();
+    btn.classList.remove('playing');
+    btn.querySelector('span').textContent = 'Play recording';
+    btn.querySelector('i').setAttribute('data-lucide', 'play');
+    lucide.createIcons({ nodes: [btn] });
+  } else {
+    const ok = await playVoiceIntention(false);
+    if (ok) {
+      btn.classList.add('playing');
+      btn.querySelector('span').textContent = 'Stop';
+      btn.querySelector('i').setAttribute('data-lucide', 'square');
+      lucide.createIcons({ nodes: [btn] });
+      __voiceAudioEl.onended = () => {
+        btn.classList.remove('playing');
+        btn.querySelector('span').textContent = 'Play recording';
+        btn.querySelector('i').setAttribute('data-lucide', 'play');
+        lucide.createIcons({ nodes: [btn] });
+      };
+    }
+  }
 }
 
 async function saveIntention() {
@@ -8525,7 +8998,7 @@ let __ritualDroneGain = null;
 let __ritualDroneOsc2 = null; // second osc for richer timbre
 let __bassRAF = null; // v6: bass analysis RAF handle
 
-function startRitualAudio() {
+async function startRitualAudio() {
   try {
     if (!__ritualAudioCtx) {
       __ritualAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -8579,6 +9052,32 @@ function startRitualAudio() {
     __ritualDroneOsc.start();
     __ritualDroneOsc2.start();
 
+    // v6.3: Binaural beats layer — theta target (4Hz delta/theta border for sleep-onset with awareness)
+    // Stereo routing: left ear 200Hz, right ear 204Hz → 4Hz binaural beat
+    try {
+      __binauralNodes = startBinauralBeats(__ritualAudioCtx, 4);
+      if (__binauralNodes) {
+        __binauralNodes.master.connect(__ritualAudioCtx.destination);
+        __binauralNodes.leftOsc.start();
+        __binauralNodes.rightOsc.start();
+        // Fade in binaural over 3s
+        __binauralNodes.master.gain.linearRampToValueAtTime(0.5, __ritualAudioCtx.currentTime + 3);
+      }
+    } catch (e) { console.warn('Binaural layer failed', e); }
+
+    // v6.3: Play voice-recorded intention on a loop (if exists), mixed low
+    try {
+      const voiceDataUrl = await getSetting('ritualVoiceIntention', null);
+      if (voiceDataUrl) {
+        if (__voiceAudioEl) { __voiceAudioEl.pause(); __voiceAudioEl = null; }
+        __voiceAudioEl = new Audio(voiceDataUrl);
+        __voiceAudioEl.loop = true;
+        __voiceAudioEl.volume = 0.35;  // soft, subliminal-ish
+        // Delay voice loop start until after binaural fades in
+        setTimeout(() => { try { __voiceAudioEl?.play(); } catch(e){} }, 4000);
+      }
+    } catch (e) { console.warn('Voice loop failed', e); }
+
     // v6: feed bass level to nebula background shader
     if (window.__nebulaSetBass && !__bassRAF) {
       const tickBass = () => {
@@ -8615,14 +9114,27 @@ function setRitualAudioIntensity(progress) {
 function stopRitualAudio() {
   if (!__ritualDroneGain || !__ritualAudioCtx) return;
   __ritualDroneGain.gain.linearRampToValueAtTime(0, __ritualAudioCtx.currentTime + 0.5);
+  // v6.3: fade out binaural beats too
+  if (__binauralNodes && __binauralNodes.master) {
+    try {
+      __binauralNodes.master.gain.linearRampToValueAtTime(0, __ritualAudioCtx.currentTime + 0.5);
+    } catch(e) {}
+  }
   setTimeout(() => {
     try {
       if (__ritualDroneOsc) __ritualDroneOsc.stop();
       if (__ritualDroneOsc2) __ritualDroneOsc2.stop();
       __ritualDroneOsc = null;
       __ritualDroneOsc2 = null;
+      // v6.3: stop binaural oscillators
+      if (__binauralNodes) {
+        try { __binauralNodes.leftOsc.stop(); __binauralNodes.rightOsc.stop(); } catch(e) {}
+        __binauralNodes = null;
+      }
     } catch(e) {}
   }, 600);
+  // v6.3: stop voice loop
+  stopVoiceIntention();
   // v6: stop bass analysis + reset nebula bass
   if (__bassRAF) { cancelAnimationFrame(__bassRAF); __bassRAF = null; }
   if (window.__nebulaSetBass) window.__nebulaSetBass(0);
@@ -8806,8 +9318,10 @@ let __orbVisibilityHandler = null;  // v6.1: for cleanup
 
 async function initRitualOrbShader() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  if (window.__lucidLowPower) return;
-  // Ensure THREE is available (shared with nebula)
+  // v6.2: removed __lucidLowPower gate — the ritual orb is the centerpiece of
+  // the ritual experience and only ~300x300. Mobile users explicitly opened the
+  // ritual expecting the full visual; falling back to a flat circle is worse
+  // than a slightly less smooth sphere.
   if (typeof window.THREE === 'undefined') {
     try { window.THREE = await import('three'); } catch (e) { return; }
   }
@@ -8818,11 +9332,14 @@ async function initRitualOrbShader() {
   if (!canvas) return;
 
   try {
+    // v6.2: cap pixel ratio at 1.5 on mobile to avoid iOS backing-store limits
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const maxRatio = isMobile ? 1.5 : 2;
     __orbRenderer = new THREE.WebGLRenderer({
-      canvas, antialias: true, alpha: true, premultipliedAlpha: false,
+      canvas, antialias: !isMobile, alpha: true, premultipliedAlpha: false,
       powerPreference: 'high-performance',
     });
-    __orbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    __orbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxRatio));
     __orbRenderer.setSize(280, 280, false);
     __orbRenderer.setClearColor(0x000000, 0);
 
@@ -9190,7 +9707,9 @@ function updateBreathCue(s) {
   const breathDur = s.phase.breathDur * 1000;
   const elapsed = (Date.now() - s.breathStartTime) % breathDur;
   const isInhale = elapsed < breathDur / 2;
-  cue.textContent = isInhale ? 'Breathe in&hellip;' : 'Breathe out&hellip;';
+  // v6.2: use the actual ellipsis character (…), not the HTML entity,
+  // because textContent doesn't decode entities (was showing "Breathe in&hellip;")
+  cue.textContent = isInhale ? 'Breathe in…' : 'Breathe out…';
 }
 
 // Particle system: drift particles toward orb while holding; burst on completion
@@ -9348,6 +9867,1025 @@ async function getRitualStreak() {
   return streak;
 }
 
+// =====================================================================
+// v6.3 ENHANCED RITUAL SYSTEM — "Guaranteed Lucid" 7-Phase Protocol
+// =====================================================================
+// Combines every proven lucid-dream induction technique in optimal sequence:
+//   1. SETTLE   — 4-7-8 breathing regulation + body scan (parasympathetic shift)
+//   2. RECALL   — review today's RCs + recent dream (prospective memory priming)
+//   3. SSILD    — Senses Initiated: cycle sight/sound/touch (3 cycles × 15s = 45s)
+//   4. VISUALIZE — replay recent dream, then imagine becoming lucid (MILD core)
+//   5. CHARGE   — MILD affirmation hold (existing orb mechanic, enhanced)
+//   6. ANCHOR   — bedside reality check + hand-position anchor (carries into dreams)
+//   7. DRIFT    — final intention as last conscious thought (critical for MILD)
+//
+// Plus: binaural beats (theta 6Hz), voice-recorded intention, smart WBTB
+// with mini-ritual on wake, morning follow-through, effectiveness tracking.
+// =====================================================================
+
+const RITUAL_PHASES_V63 = [
+  {
+    id: 'settle',
+    name: 'Settling',
+    duration: 30000,  // 30s
+    breathDur: 6,     // 4-7-8-ish: 3s in, 3s out (simplified for cue)
+    color: 'var(--muted)',
+    instruction: 'Lie still. Breathe slowly. Let the day settle behind you.',
+    techniques: ['breath'],
+  },
+  {
+    id: 'recall',
+    name: 'Recalling',
+    duration: 25000,  // 25s
+    breathDur: 6,
+    color: 'var(--accent)',
+    instruction: 'Recall your most recent dream and today\'s reality checks. Memory is the bridge.',
+    techniques: ['recall'],
+  },
+  {
+    id: 'ssild',
+    name: 'Sensing',
+    duration: 60000,  // 60s — 3 cycles × 20s (sight/sound/touch)
+    breathDur: 7,
+    color: 'var(--violet)',
+    instruction: 'Cycle your attention: sight, then sound, then touch. Soft, passive focus.',
+    techniques: ['ssild'],
+  },
+  {
+    id: 'visualize',
+    name: 'Visualizing',
+    duration: 45000,  // 45s
+    breathDur: 7,
+    color: 'var(--rose)',
+    instruction: 'Replay your recent dream. Then imagine realising you are dreaming within it.',
+    techniques: ['viz'],
+  },
+  {
+    id: 'charge',
+    name: 'Charging',
+    duration: 30000,  // 30s hold (existing orb mechanic)
+    breathDur: 8,
+    color: 'var(--accent-bright)',
+    instruction: 'Press and hold the orb. Let the affirmation sink into your dreaming mind.',
+    techniques: ['mild'],
+  },
+  {
+    id: 'anchor',
+    name: 'Anchoring',
+    duration: 20000,  // 20s
+    breathDur: 8,
+    color: 'var(--success)',
+    instruction: 'Perform a reality check now. Pinch your nose, look at your hands. This is your anchor.',
+    techniques: ['rc'],
+  },
+  {
+    id: 'drift',
+    name: 'Drifting',
+    duration: 20000,  // 20s
+    breathDur: 10,
+    color: 'var(--gold-bright)',
+    instruction: 'Let this intention be your last conscious thought as you drift toward sleep.',
+    techniques: ['mild'],
+  },
+];
+
+const RITUAL_V63_TOTAL_MS = RITUAL_PHASES_V63.reduce((s, p) => s + p.duration, 0);  // ~230s = ~4min
+
+// Sense cycle for SSILD phase
+const SSILD_SENSES = [
+  { id: 'sight', name: 'Sight', icon: 'eye', focus: 'Notice the faint shapes behind your eyelids. Do not force images — just observe.' },
+  { id: 'sound', name: 'Hearing', icon: 'ear', focus: 'Listen to the ambient soundscape. The drone, your breath, distant hums.' },
+  { id: 'touch', name: 'Touch', icon: 'hand', focus: 'Feel the weight of the blanket, the pillow against your head, the temperature of the air.' },
+];
+
+// State for v6.3 ritual
+let __ritualV63State = null;
+
+// === Binaural beats audio engine (v6.3) ===
+// Theta target: 6Hz (associated with REM-onset and dream state)
+// Carrier: 200Hz (low, soothing). Left ear: 200Hz, right ear: 203Hz → 3Hz beat...
+// Actually for 6Hz theta: left 200Hz, right 206Hz. We use 4Hz as a balance (deep theta/alpha border).
+let __binauralNodes = null;
+
+function startBinauralBeats(ctx, targetHz = 4) {
+  // 4Hz is at the deep-theta / delta border — good for falling asleep with awareness
+  // Carrier frequency 200Hz (low, gentle)
+  if (!ctx) return null;
+  try {
+    const carrier = 200;
+    const leftFreq = carrier;
+    const rightFreq = carrier + targetHz;
+    const leftOsc = ctx.createOscillator();
+    const rightOsc = ctx.createOscillator();
+    leftOsc.type = 'sine';
+    leftOsc.frequency.value = leftFreq;
+    rightOsc.type = 'sine';
+    rightOsc.frequency.value = rightFreq;
+    // Separate gains for stereo routing
+    const merger = ctx.createChannelMerger(2);
+    const leftGain = ctx.createGain();
+    const rightGain = ctx.createGain();
+    leftGain.gain.value = 0.08;
+    rightGain.gain.value = 0.08;
+    leftOsc.connect(leftGain);
+    rightOsc.connect(rightGain);
+    leftGain.connect(merger, 0, 0);
+    rightGain.connect(merger, 0, 1);
+    // Master gain (fade in)
+    const master = ctx.createGain();
+    master.gain.value = 0;
+    merger.connect(master);
+    // Lowpass to soften any harshness
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 600;
+    master.connect(filter);
+    const nodes = { leftOsc, rightOsc, leftGain, rightGain, master, filter };
+    return nodes;
+  } catch (e) {
+    console.warn('Binaural beat init failed', e);
+    return null;
+  }
+}
+
+// === Voice-recorded intention (v6.3) ===
+let __voiceRecording = null;
+let __voiceBlob = null;
+let __voiceAudioEl = null;
+
+async function startVoiceRecording() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast('Microphone not available', 'mic-off');
+      return false;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mr = new MediaRecorder(stream);
+    const chunks = [];
+    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mr.onstop = async () => {
+      __voiceBlob = new Blob(chunks, { type: 'audio/webm' });
+      // Store in IndexedDB as data URL
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          await putSetting('ritualVoiceIntention', reader.result);
+          showToast('Intention recorded', 'mic');
+        };
+        reader.readAsDataURL(__voiceBlob);
+      } catch (e) { console.warn('Voice save failed', e); }
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mr.start();
+    __voiceRecording = mr;
+    return true;
+  } catch (e) {
+    console.warn('Voice recording failed', e);
+    showToast('Microphone permission denied', 'mic-off');
+    return false;
+  }
+}
+
+function stopVoiceRecording() {
+  if (__voiceRecording && __voiceRecording.state === 'recording') {
+    __voiceRecording.stop();
+    __voiceRecording = null;
+  }
+}
+
+async function playVoiceIntention(loop = true) {
+  try {
+    const dataUrl = await getSetting('ritualVoiceIntention', null);
+    if (!dataUrl) {
+      showToast('No recording yet — record your voice first', 'mic');
+      return false;
+    }
+    if (__voiceAudioEl) {
+      __voiceAudioEl.pause();
+      __voiceAudioEl = null;
+    }
+    __voiceAudioEl = new Audio(dataUrl);
+    __voiceAudioEl.loop = loop;
+    __voiceAudioEl.volume = 0.6;
+    await __voiceAudioEl.play();
+    return true;
+  } catch (e) {
+    console.warn('Voice playback failed', e);
+    return false;
+  }
+}
+
+function stopVoiceIntention() {
+  if (__voiceAudioEl) {
+    __voiceAudioEl.pause();
+    __voiceAudioEl = null;
+  }
+}
+
+// === Pre-ritual preparation checklist (v6.3) ===
+async function buildRitualPrepChecklist() {
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  // Reality checks today
+  const rcToday = rcLogCache.filter(r => (r.timestamp || '').startsWith(today)).length;
+  // Dream logged in last 3 days
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
+  const recentDream = dreamsCache.find(d => d.date >= threeDaysAgo);
+  // Ritual streak
+  const streak = await getRitualStreak();
+  // Time of day check (ritual best after 9pm or before 2am)
+  const hour = new Date().getHours();
+  const goodTime = hour >= 20 || hour <= 2;
+  // Sleep schedule set?
+  const sleepSched = await getSetting('sleepSchedule', null);
+  const hasSchedule = sleepSched && sleepSched.bedtime;
+
+  const items = [];
+  // RC count
+  if (rcToday >= 3) {
+    items.push({ status: 'pass', icon: 'check', text: `<strong>${rcToday} reality checks</strong> logged today`, detail: 'Excellent — your prospective memory is primed.' });
+  } else if (rcToday >= 1) {
+    items.push({ status: 'warn', icon: 'alert-triangle', text: `<strong>Only ${rcToday} reality check${rcToday===1?'':'s'}</strong> today`, detail: 'Aim for 5-10 throughout the day for best results.' });
+  } else {
+    items.push({ status: 'fail', icon: 'x', text: `<strong>No reality checks</strong> logged today`, detail: 'Do at least 3 before bed — they carry into dreams.' });
+  }
+  // Recent dream
+  if (recentDream) {
+    items.push({ status: 'pass', icon: 'check', text: `<strong>Recent dream recalled</strong> (${recentDream.date === today ? 'last night' : recentDream.date === yesterday ? 'yesterday' : 'recently'})`, detail: 'Dream recall is the foundation of lucid dreaming.' });
+  } else {
+    items.push({ status: 'warn', icon: 'alert-triangle', text: `<strong>No dreams logged in 3 days</strong>`, detail: 'Recall fades fast. Log fragments even if incomplete.' });
+  }
+  // Ritual streak
+  if (streak >= 7) {
+    items.push({ status: 'pass', icon: 'flame', text: `<strong>${streak}-night ritual streak</strong>`, detail: 'Consistency is paying off — keep going.' });
+  } else if (streak >= 1) {
+    items.push({ status: 'pass', icon: 'flame', text: `<strong>${streak}-night ritual streak</strong>`, detail: 'Build to 7+ nights for maximum effect.' });
+  } else {
+    items.push({ status: 'warn', icon: 'moon', text: `<strong>Starting fresh tonight</strong>`, detail: 'The first night of a new streak. Set the pattern.' });
+  }
+  // Time of day
+  if (goodTime) {
+    items.push({ status: 'pass', icon: 'check', text: `<strong>Optimal time</strong> for the ritual`, detail: 'Pre-sleep intention is most effective.' });
+  } else {
+    items.push({ status: 'warn', icon: 'clock', text: `<strong>Unusual time</strong> for the ritual`, detail: 'Best done right before sleep (after 8pm).' });
+  }
+  // Sleep schedule
+  if (hasSchedule) {
+    items.push({ status: 'pass', icon: 'check', text: `<strong>Sleep schedule set</strong> (bed ${sleepSched.bedtime}, wake ${sleepSched.waketime})`, detail: 'WBTB will be timed to your REM cycles.' });
+  } else {
+    items.push({ status: 'warn', icon: 'settings', text: `<strong>No sleep schedule set</strong>`, detail: 'Set one in Sleep Schedule for optimal WBTB timing.' });
+  }
+  return items;
+}
+
+// === Effectiveness tracking (v6.3) ===
+// Track which technique combinations produce lucid dreams
+async function getRitualEffectiveness() {
+  const logs = await getAllRitualLogs();
+  // Match ritual logs to dreams logged the following day
+  let completedCount = 0;
+  let lucidAfterRitual = 0;
+  let lucidAfterWBTB = 0;
+  let ritualDays = 0;
+  for (const log of logs) {
+    if (!log.completedAt) continue;
+    completedCount++;
+    // Look at dreams logged the day after the ritual
+    const ritualDate = new Date(log.date + 'T00:00:00');
+    const nextDay = new Date(ritualDate.getTime() + 86400000).toISOString().split('T')[0];
+    const dreamsNextDay = dreamsCache.filter(d => d.date === nextDay);
+    if (dreamsNextDay.length) {
+      ritualDays++;
+      const lucidDreams = dreamsNextDay.filter(d => d.isLucid);
+      if (lucidDreams.length) {
+        lucidAfterRitual++;
+        if (log.wbtbCompleted) lucidAfterWBTB++;
+      }
+    }
+  }
+  const successRate = ritualDays > 0 ? Math.round((lucidAfterRitual / ritualDays) * 100) : 0;
+  const wbtbBoost = lucidAfterWBTB > 0 ? Math.round((lucidAfterWBTB / Math.max(lucidAfterRitual, 1)) * 100) : 0;
+  return {
+    completed: completedCount,
+    trackedDays: ritualDays,
+    lucidNights: lucidAfterRitual,
+    successRate,
+    wbtbBoost,
+  };
+}
+
+// === Open the v6.3 enhanced ritual (replaces openMildRitual) ===
+async function openMildRitual() {
+  const today = new Date().toISOString().split('T')[0];
+  const existingIntention = await getIntention(today);
+  const defaultIntention = 'Tonight I will recognise that I am dreaming.';
+  const intention = existingIntention ? existingIntention.text : defaultIntention;
+  const todayLog = await getRitualLog(today);
+  const alreadyCompleted = todayLog && todayLog.completedAt;
+  // Get most recent dream for visualization phase
+  const recentDream = dreamsCache.length ? [...dreamsCache].sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null;
+  // RC count today for recall phase
+  const rcToday = rcLogCache.filter(r => (r.timestamp || '').startsWith(today)).length;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ritual-overlay';
+  overlay.id = 'ritualOverlay';
+  overlay.innerHTML = `
+    <button class="ritual-close" onclick="closeMildRitual()" aria-label="Close ritual">
+      <i data-lucide="x" style="width:20px;height:20px;"></i>
+    </button>
+
+    <!-- Phase tracker dots -->
+    <div class="ritual-phase-tracker" id="ritualPhaseTracker">
+      ${RITUAL_PHASES_V63.map((p, i) => `<div class="ritual-phase-dot${i === 0 ? ' active' : ''}" data-phase="${p.id}"></div>`).join('')}
+    </div>
+
+    <div class="ritual-title" id="ritualTitle">Evening Ritual</div>
+    <div class="ritual-subtitle" id="ritualSubtitle">A complete pre-sleep lucid dream protocol. Follow each phase in sequence.</div>
+
+    <div class="ritual-orb-wrap" id="ritualOrbWrap">
+      <canvas class="ritual-orb-canvas" id="ritualOrbCanvas" width="280" height="280" aria-hidden="true"></canvas>
+      <svg class="ritual-progress-arc" viewBox="0 0 320 320">
+        <defs>
+          <linearGradient id="ritualGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#9FEAE8"/>
+            <stop offset="50%" stop-color="#B8F5F3"/>
+            <stop offset="100%" stop-color="#F5D97A"/>
+          </linearGradient>
+        </defs>
+        <circle class="track" cx="160" cy="160" r="150"/>
+        <circle class="fill" id="ritualArcFill" cx="160" cy="160" r="150"
+          stroke-dasharray="942.48" stroke-dashoffset="942.48"/>
+      </svg>
+      <div class="ritual-breath-ring" id="ritualBreathRing1"></div>
+      <div class="ritual-breath-ring ring-2" id="ritualBreathRing2"></div>
+      <div class="ritual-breath-ring ring-3" id="ritualBreathRing3"></div>
+      <div class="ritual-orb" id="ritualOrb" style="--charge: 0;">
+        <div class="ritual-orb-text" id="ritualOrbText">${escapeHtml(intention)}</div>
+      </div>
+    </div>
+
+    <!-- Visualization phase content (hidden by default) -->
+    <div class="ritual-visualization" id="ritualVisualization" style="display:none;">
+      <div class="viz-dream-title" id="vizDreamTitle"></div>
+      <div class="viz-dream-snippet" id="vizDreamSnippet"></div>
+      <div class="viz-prompt" id="vizPrompt"></div>
+    </div>
+
+    <!-- SSILD sense-cycle indicator (hidden by default) -->
+    <div class="ritual-ssild-sense" id="ritualSsild" style="display:none;">
+      <div class="sense-icon"><i data-lucide="eye" id="ssildSenseIcon"></i></div>
+      <div class="sense-name" id="ssildSenseName">Sight</div>
+      <div class="sense-cycles" id="ssildCycles">Cycle 1 of 3</div>
+    </div>
+
+    <!-- Drift phase prompt (hidden by default) -->
+    <div class="ritual-drift-prompt" id="ritualDriftPrompt" style="display:none;">
+      <div class="drift-text" id="driftText"></div>
+    </div>
+
+    <div class="ritual-phase" id="ritualPhase">Settling</div>
+    <div class="ritual-breath-cue" id="ritualBreathCue">Breathe in… Breathe out…</div>
+    <div class="ritual-instruction" id="ritualInstruction">
+      ${RITUAL_PHASES_V63[0].instruction}
+    </div>
+
+    <!-- Phase timer + skip -->
+    <div class="ritual-phase-controls" id="ritualPhaseControls" style="position:absolute;bottom:90px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:5;">
+      <div class="ritual-phase-time" id="ritualPhaseTime" style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:var(--accent);letter-spacing:0.05em;">0:30</div>
+      <button class="btn btn-secondary btn-sm" id="ritualSkipBtn" onclick="skipRitualPhase()" style="font-size:0.78rem;padding:6px 12px;opacity:0.7;">Skip phase →</button>
+    </div>
+
+    <canvas class="ritual-particles" id="ritualParticles"></canvas>
+
+    <div class="ritual-stats">
+      <div class="stat-item"><div class="val" id="ritualStatTime">0:00</div><div>elapsed</div></div>
+      <div class="stat-item"><div class="val" id="ritualStatPhase">1/7</div><div>phase</div></div>
+      <div class="stat-item"><div class="val" id="ritualStatStreak">${await getRitualStreak()}</div><div>night streak</div></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons({nodes:[overlay]});
+
+  // Initialize v6.3 ritual state
+  __ritualV63State = {
+    phaseIndex: 0,
+    phase: RITUAL_PHASES_V63[0],
+    phaseStartTime: Date.now(),
+    totalElapsed: 0,
+    intention,
+    recentDream,
+    rcToday,
+    completed: false,
+    rafId: null,
+    holding: false,
+    accumulatedMs: 0,
+    holdStartTime: 0,
+    orbProgress: 0,  // 0..1 for the charge phase
+    ssildCycleIndex: 0,  // 0,1,2 for sight/sound/touch
+    ssildBigCycle: 0,    // 0,1,2 for the 3 full cycles
+    particleCanvas: document.getElementById('ritualParticles'),
+    particleCtx: null,
+    particles: [],
+    breathStartTime: Date.now(),
+    binauralStarted: false,
+    techniquesUsed: [],  // ['mild', 'wbtb', 'ssild', 'rc', 'viz']
+  };
+  // Mark all techniques that will be used (for tracking)
+  RITUAL_PHASES_V63.forEach(p => p.techniques.forEach(t => {
+    if (!__ritualV63State.techniquesUsed.includes(t)) __ritualV63State.techniquesUsed.push(t);
+  }));
+
+  // Setup particle canvas
+  const canvas = __ritualV63State.particleCanvas;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  __ritualV63State.particleCtx = canvas.getContext('2d');
+
+  // Bind hold events (only for charge phase)
+  const orb = document.getElementById('ritualOrb');
+  const startHold = (e) => {
+    if (e) e.preventDefault();
+    if (__ritualV63State.completed) return;
+    if (__ritualV63State.phase.id !== 'charge') return;  // only hold during charge
+    __ritualV63State.holding = true;
+    __ritualV63State.holdStartTime = Date.now();
+    orb.classList.add('holding');
+    if (!__ritualV63State.binauralStarted) {
+      startRitualAudio();
+      __ritualV63State.binauralStarted = true;
+    }
+    vibrateSafe(RITUAL_HAPTICS[__ritualV63State.phase.id] || [40]);
+  };
+  const endHold = (e) => {
+    if (e) e.preventDefault();
+    if (!__ritualV63State.holding) return;
+    __ritualV63State.holding = false;
+    __ritualV63State.accumulatedMs += Date.now() - __ritualV63State.holdStartTime;
+    orb.classList.remove('holding');
+    if (__ritualV63State.orbProgress >= 1) {
+      // Charge complete — advance to anchor phase
+      advanceRitualPhase();
+    } else {
+      vibrateSafe([30]);
+    }
+  };
+  orb.addEventListener('mousedown', startHold);
+  orb.addEventListener('touchstart', startHold, { passive: false });
+  document.addEventListener('mouseup', endHold);
+  document.addEventListener('touchend', endHold);
+  document.addEventListener('touchcancel', endHold);
+  const spaceHandler = (e) => {
+    if (e.code === 'Space' && !__ritualV63State.completed) {
+      e.preventDefault();
+      if (e.type === 'keydown' && !__ritualV63State.holding && !e.repeat && __ritualV63State.phase.id === 'charge') {
+        startHold(e);
+      } else if (e.type === 'keyup' && __ritualV63State.holding) {
+        endHold(e);
+      }
+    }
+  };
+  document.addEventListener('keydown', spaceHandler);
+  document.addEventListener('keyup', spaceHandler);
+  __ritualV63State._spaceHandler = spaceHandler;
+  __ritualV63State._endHold = endHold;
+
+  // Resize handler
+  const resizeHandler = () => {
+    const c = __ritualV63State.particleCanvas;
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+  };
+  window.addEventListener('resize', resizeHandler);
+  __ritualV63State._resizeHandler = resizeHandler;
+
+  // Start animation loop
+  __ritualV63State.rafId = requestAnimationFrame(ritualV63Tick);
+
+  // Initialize shader orb (async, non-blocking)
+  initRitualOrbShader();
+
+  // Auto-start binaural audio on phase 1 (with user-gesture workaround: the ritual
+  // was opened via a click, so AudioContext should be allowed)
+  setTimeout(() => {
+    if (!__ritualV63State.binauralStarted && __ritualV63State.phase.id === 'settle') {
+      startRitualAudio();
+      __ritualV63State.binauralStarted = true;
+    }
+  }, 500);
+}
+
+// === Skip current phase (advance early) ===
+function skipRitualPhase() {
+  if (!__ritualV63State || __ritualV63State.completed) return;
+  advanceRitualPhase();
+}
+
+// === Advance to next phase ===
+function advanceRitualPhase() {
+  if (!__ritualV63State) return;
+  const s = __ritualV63State;
+  s.phaseIndex++;
+  if (s.phaseIndex >= RITUAL_PHASES_V63.length) {
+    completeRitualV63();
+    return;
+  }
+  s.phase = RITUAL_PHASES_V63[s.phaseIndex];
+  s.phaseStartTime = Date.now();
+  // Reset phase-specific state
+  if (s.phase.id === 'charge') {
+    s.holding = false;
+    s.accumulatedMs = 0;
+    s.orbProgress = 0;
+  }
+  if (s.phase.id === 'ssild') {
+    s.ssildCycleIndex = 0;
+    s.ssildBigCycle = 0;
+  }
+  onV63PhaseChange(s);
+}
+
+function onV63PhaseChange(s) {
+  // Update phase tracker dots
+  document.querySelectorAll('.ritual-phase-dot').forEach((dot, i) => {
+    dot.classList.toggle('active', i === s.phaseIndex);
+    dot.classList.toggle('done', i < s.phaseIndex);
+  });
+  // Update phase label
+  const phaseEl = document.getElementById('ritualPhase');
+  if (phaseEl) {
+    phaseEl.textContent = s.phase.name;
+    phaseEl.className = 'ritual-phase ' + s.phase.id;
+  }
+  // Update breath ring duration
+  document.querySelectorAll('.ritual-breath-ring').forEach(r => {
+    r.style.setProperty('--breath-duration', s.phase.breathDur + 's');
+  });
+  // Update instruction
+  const instrEl = document.getElementById('ritualInstruction');
+  if (instrEl) instrEl.textContent = s.phase.instruction;
+  // Update phase counter
+  const phaseCounter = document.getElementById('ritualStatPhase');
+  if (phaseCounter) phaseCounter.textContent = (s.phaseIndex + 1) + '/' + RITUAL_PHASES_V63.length;
+  // Update title/subtitle
+  const title = document.getElementById('ritualTitle');
+  const subtitle = document.getElementById('ritualSubtitle');
+  if (title) title.textContent = s.phase.name;
+  // Hide all phase-specific overlays
+  const viz = document.getElementById('ritualVisualization');
+  const ssild = document.getElementById('ritualSsild');
+  const drift = document.getElementById('ritualDriftPrompt');
+  const orbWrap = document.getElementById('ritualOrbWrap');
+  if (viz) viz.style.display = 'none';
+  if (ssild) ssild.style.display = 'none';
+  if (drift) drift.style.display = 'none';
+  // Show orb only for charge + drift phases
+  if (orbWrap) orbWrap.style.opacity = (s.phase.id === 'charge' || s.phase.id === 'drift' || s.phase.id === 'settle' || s.phase.id === 'recall') ? '1' : '0.3';
+
+  // Phase-specific setup
+  if (s.phase.id === 'recall' && s.recentDream) {
+    if (subtitle) subtitle.textContent = `Your most recent dream: "${s.recentDream.title}" — ${s.recentDream.date}. ${s.rcToday} reality checks today.`;
+  } else if (s.phase.id === 'visualize') {
+    setupVisualizationPhase(s);
+  } else if (s.phase.id === 'ssild') {
+    if (subtitle) subtitle.textContent = 'Cycle your senses gently. This is Senses Initiated Lucid Dreaming.';
+    setupSsildPhase(s);
+  } else if (s.phase.id === 'charge') {
+    if (subtitle) subtitle.textContent = 'Press and hold the orb. Let the affirmation sink in.';
+  } else if (s.phase.id === 'anchor') {
+    if (subtitle) subtitle.textContent = 'Reality check now: pinch your nose and try to breathe. Look at your hands. This is your anchor.';
+  } else if (s.phase.id === 'drift') {
+    if (subtitle) subtitle.textContent = 'Allow sleep to come. Hold the intention gently.';
+    setupDriftPhase(s);
+  } else {
+    if (subtitle) subtitle.textContent = s.phase.instruction;
+  }
+  // Haptic on phase change
+  if (s.phaseIndex > 0) vibrateSafe(RITUAL_HAPTICS[s.phase.id] || [60]);
+  // Update audio intensity based on phase
+  const intensityMap = { settle: 0.15, recall: 0.2, ssild: 0.25, visualize: 0.35, charge: 0.5, anchor: 0.4, drift: 0.3 };
+  setRitualAudioIntensity(intensityMap[s.phase.id] || 0.3);
+}
+
+function setupVisualizationPhase(s) {
+  const viz = document.getElementById('ritualVisualization');
+  if (!viz) return;
+  viz.style.display = 'flex';
+  const title = document.getElementById('vizDreamTitle');
+  const snippet = document.getElementById('vizDreamSnippet');
+  const prompt = document.getElementById('vizPrompt');
+  // Sequence: show dream title → snippet → prompt to imagine becoming lucid
+  if (s.recentDream && title && snippet) {
+    title.textContent = s.recentDream.title;
+    snippet.textContent = (s.recentDream.narrative || '').slice(0, 280) + ((s.recentDream.narrative || '').length > 280 ? '…' : '');
+    // Reveal progressively
+    setTimeout(() => title.classList.add('visible'), 200);
+    setTimeout(() => snippet.classList.add('visible'), 1500);
+    setTimeout(() => {
+      if (prompt) {
+        prompt.textContent = 'Now imagine yourself back in this dream… and realising you are dreaming. What do you do?';
+        prompt.classList.add('visible');
+      }
+    }, 6000);
+  } else if (prompt) {
+    prompt.textContent = 'Imagine a place you know well. Now imagine looking at your hands and realising you are dreaming.';
+    setTimeout(() => prompt.classList.add('visible'), 200);
+  }
+}
+
+function setupSsildPhase(s) {
+  const ssild = document.getElementById('ritualSsild');
+  if (!ssild) return;
+  ssild.style.display = 'flex';
+  updateSsildDisplay(s);
+}
+
+function updateSsildDisplay(s) {
+  const sense = SSILD_SENSES[s.ssildCycleIndex];
+  const iconEl = document.getElementById('ssildSenseIcon');
+  const nameEl = document.getElementById('ssildSenseName');
+  const cyclesEl = document.getElementById('ssildCycles');
+  if (iconEl) {
+    iconEl.setAttribute('data-lucide', sense.icon);
+    lucide.createIcons({ nodes: [iconEl.parentElement] });
+  }
+  if (nameEl) nameEl.textContent = sense.name;
+  if (cyclesEl) cyclesEl.textContent = `Cycle ${s.ssildBigCycle + 1} of 3 · ${sense.focus}`;
+}
+
+function setupDriftPhase(s) {
+  const drift = document.getElementById('ritualDriftPrompt');
+  if (!drift) return;
+  drift.style.display = 'block';
+  const text = document.getElementById('driftText');
+  if (text) {
+    text.textContent = `"${s.intention}" — let this be your last thought. If you wake in the night, hold this intention again.`;
+    setTimeout(() => drift.classList.add('visible'), 500);
+  }
+}
+
+// === Main tick for v6.3 ritual ===
+function ritualV63Tick(now) {
+  if (!__ritualV63State) return;
+  const s = __ritualV63State;
+  if (s.completed) {
+    s.rafId = requestAnimationFrame(ritualV63Tick);
+    updateRitualParticles(s);
+    return;
+  }
+  // Update phase elapsed
+  const phaseElapsed = Date.now() - s.phaseStartTime;
+  const phaseDuration = s.phase.duration;
+  // Update orbProgress during charge phase
+  if (s.phase.id === 'charge' && s.holding) {
+    const currentHoldMs = Date.now() - s.holdStartTime;
+    const totalMs = s.accumulatedMs + currentHoldMs;
+    s.orbProgress = Math.min(1, totalMs / RITUAL_TOTAL_DURATION_MS);
+  }
+  // Auto-advance phase when duration elapses (except charge which requires hold)
+  if (phaseElapsed >= phaseDuration && s.phase.id !== 'charge') {
+    advanceRitualPhase();
+  }
+  // SSILD sub-cycle: switch sense every (phaseDuration / 9) ms (3 senses × 3 cycles)
+  if (s.phase.id === 'ssild') {
+    const senseDuration = phaseDuration / 9;  // ~6.6s per sense
+    const senseIndex = Math.floor(phaseElapsed / senseDuration) % 3;
+    const bigCycle = Math.floor(phaseElapsed / (senseDuration * 3));
+    if (senseIndex !== s.ssildCycleIndex || bigCycle !== s.ssildBigCycle) {
+      s.ssildCycleIndex = senseIndex;
+      s.ssildBigCycle = bigCycle;
+      updateSsildDisplay(s);
+      vibrateSafe([30]);
+    }
+  }
+  // Update orb shader charge
+  const orbCharge = s.phase.id === 'charge' ? s.orbProgress : (s.phase.id === 'drift' ? 0.7 : 0.1);
+  setRitualOrbCharge(orbCharge, s.holding);
+  if (window.__nebulaSetCharge) window.__nebulaSetCharge(orbCharge * 0.5);
+  const orb = document.getElementById('ritualOrb');
+  if (orb) orb.style.setProperty('--charge', orbCharge.toFixed(3));
+  // Update arc fill
+  const arcFill = document.getElementById('ritualArcFill');
+  if (arcFill) {
+    const circumference = 2 * Math.PI * 150;
+    const offset = circumference * (1 - orbCharge);
+    arcFill.style.strokeDashoffset = offset;
+  }
+  // Update phase timer
+  const phaseTimeEl = document.getElementById('ritualPhaseTime');
+  if (phaseTimeEl) {
+    const remaining = Math.max(0, Math.ceil((phaseDuration - phaseElapsed) / 1000));
+    const min = Math.floor(remaining / 60);
+    const sec = remaining % 60;
+    phaseTimeEl.textContent = `${min}:${String(sec).padStart(2, '0')}`;
+  }
+  // Update total elapsed
+  const totalElapsed = Date.now() - (s._ritualStart || (s._ritualStart = Date.now() - (s.phaseIndex > 0 ? RITUAL_PHASES_V63.slice(0, s.phaseIndex).reduce((sum, p) => sum + p.duration, 0) + phaseElapsed : phaseElapsed)));
+  const statTime = document.getElementById('ritualStatTime');
+  if (statTime) {
+    const totalSec = Math.floor(totalElapsed / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    statTime.textContent = `${min}:${String(sec).padStart(2, '0')}`;
+  }
+  // Update breath cue
+  updateBreathCue(s);
+  // Update audio intensity based on holding
+  if (s.holding) setRitualAudioIntensity(0.5 + s.orbProgress * 0.5);
+  // Update particles
+  updateRitualParticles(s);
+  s.rafId = requestAnimationFrame(ritualV63Tick);
+}
+
+// === Complete the v6.3 ritual ===
+async function completeRitualV63() {
+  const s = __ritualV63State;
+  if (!s || s.completed) return;
+  s.completed = true;
+  // Haptic crescendo
+  vibrateSafe(RITUAL_HAPTICS.release);
+  setTimeout(() => vibrateSafe(RITUAL_HAPTICS.complete), 800);
+  // Peak audio, then fade
+  setRitualAudioIntensity(1);
+  setTimeout(() => stopRitualAudio(), 3000);
+  // Particle burst
+  for (let i = 0; i < 100; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 6;
+    s.particles.push({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      size: 1.5 + Math.random() * 2.5,
+      hue: 'gold',
+    });
+  }
+  // Persist ritual log with technique data
+  const today = new Date().toISOString().split('T')[0];
+  const durationSec = Math.round((Date.now() - (s._ritualStart || Date.now())) / 1000);
+  await putRitualLog({
+    id: 'ritual_' + today + '_' + Date.now().toString(36),
+    date: today,
+    intention: s.intention,
+    durationSec,
+    completedAt: Date.now(),
+    techniques: s.techniquesUsed,
+    phasesCompleted: RITUAL_PHASES_V63.length,
+    version: 'v6.3',
+  });
+  await putIntention({ date: today, text: s.intention, createdAt: Date.now() });
+  // Show completion overlay
+  const overlay = document.getElementById('ritualOverlay');
+  if (overlay) {
+    const completeDiv = document.createElement('div');
+    completeDiv.className = 'ritual-complete-overlay';
+    completeDiv.innerHTML = `
+      <div class="ritual-complete-text">${escapeHtml(s.intention)}</div>
+      <div style="margin-top:20px;font-size:0.84rem;color:var(--muted);max-width:380px;line-height:1.6;">
+        The intention is set. Now close this and let sleep come.
+        ${await hasScheduledWBTB() ? '<br><br>Your WBTB alarm is set — when it wakes you, return here for the mini-ritual.' : '<br><br><strong>Tip:</strong> Set a WBTB alarm 5h30m from now to boost your odds dramatically.'}
+      </div>
+    `;
+    overlay.appendChild(completeDiv);
+  }
+  checkAchievements();
+  // Schedule WBTB automatically if user has sleep schedule
+  await autoScheduleWBTB();
+  // Auto-close after 5 seconds
+  setTimeout(() => {
+    closeMildRitual();
+    showToast('Ritual complete. Sweet lucid dreams.', 'moon', 'success');
+    if (currentPage === 'ritual') renderPage('ritual');
+  }, 5000);
+}
+
+// === Smart WBTB system (v6.3) ===
+let __wbtbAlarmTime = null;
+let __wbtbAlarmTimer = null;
+
+async function autoScheduleWBTB() {
+  // Calculate optimal WBTB time: 5h30m from now, OR based on sleep schedule
+  const sleepSched = await getSetting('sleepSchedule', null);
+  let delayMs = 5.5 * 3600000;  // default 5h30m
+  if (sleepSched && sleepSched.bedtime) {
+    // If bedtime is in the future, calculate from bedtime
+    // Otherwise just use 5.5h from now
+  }
+  __wbtbAlarmTime = Date.now() + delayMs;
+  // Schedule via setTimeout (will only fire if tab is open)
+  if (__wbtbAlarmTimer) clearTimeout(__wbtbAlarmTimer);
+  __wbtbAlarmTimer = setTimeout(triggerWBTBWake, delayMs);
+  // Store for persistence check
+  await putSetting('wbtbScheduledAt', Date.now());
+  await putSetting('wbtbScheduledFor', __wbtbAlarmTime);
+}
+
+async function hasScheduledWBTB() {
+  const scheduledFor = await getSetting('wbtbScheduledFor', 0);
+  return scheduledFor > Date.now();
+}
+
+function triggerWBTBWake() {
+  // Play escalating gentle chime
+  try {
+    const ctx = __ritualAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    // Escalating chime: 3 soft tones building in volume
+    const playChime = (startTime, freq, volume) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
+      gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + startTime + 0.5);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + startTime + 2.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + startTime);
+      osc.stop(ctx.currentTime + startTime + 3);
+    };
+    playChime(0, 523.25, 0.15);   // C5, soft
+    playChime(4, 659.25, 0.25);   // E5, medium
+    playChime(8, 783.99, 0.4);    // G5, louder
+    playChime(12, 1046.5, 0.5);   // C6, full
+  } catch (e) { console.warn('WBTB chime failed', e); }
+  // Vibrate
+  vibrateSafe([200, 100, 200, 100, 400]);
+  // Show WBTB wake overlay
+  showWBTBWakeOverlay();
+}
+
+async function showWBTBWakeOverlay() {
+  const today = new Date().toISOString().split('T')[0];
+  const intention = await getIntention(today);
+  const intentionText = intention ? intention.text : 'Tonight I will recognise that I am dreaming.';
+  const ritualLog = await getRitualLog(today);
+  const overlay = document.createElement('div');
+  overlay.className = 'wbtb-mini-ritual';
+  overlay.id = 'wbtbOverlay';
+  overlay.innerHTML = `
+    <div class="wbtb-title">WBTB — Wake Back to Bed</div>
+    <div class="wbtb-subtitle">
+      You've woken during a peak REM window. Stay calm. Stay up briefly — 20 to 30 minutes — then return to bed with your intention.
+      <br><br>Do not look at bright screens. Keep lights low. This is your most powerful lucid dream window.
+    </div>
+    <div class="wbtb-intention-display">"${escapeHtml(intentionText)}"</div>
+    <div class="wbtb-actions">
+      <button class="btn btn-primary" onclick="quickRechargeIntention()" style="padding:14px 28px;font-size:1rem;">
+        <i data-lucide="zap" style="width:18px;height:18px;"></i> Re-charge Intention (90s)
+      </button>
+      <button class="btn btn-secondary" onclick="dismissWBTB()" style="padding:14px 24px;">
+        <i data-lucide="bed" style="width:18px;height:18px;"></i> Returning to sleep
+      </button>
+    </div>
+    <div class="wbtb-options">
+      <h4>While you're up, consider:</h4>
+      <div class="wbtb-options-list">
+        <div class="wbtb-option"><i data-lucide="book-open"></i> Read your most recent dream entry — recall primes the mind.</div>
+        <div class="wbtb-option"><i data-lucide="scan-eye"></i> Do 2-3 reality checks now — they will carry into the next dream.</div>
+        <div class="wbtb-option"><i data-lucide="moon"></i> Review your dream signs (top of the ritual page).</div>
+        <div class="wbtb-option"><i data-lucide="ear"></i> Stay quiet and still — minimises arousal.</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons({ nodes: [overlay] });
+  // Mark WBTB as triggered
+  if (ritualLog) {
+    await putRitualLog({ ...ritualLog, wbtbTriggeredAt: Date.now() });
+  }
+}
+
+async function quickRechargeIntention() {
+  // Remove WBTB overlay, open a 90s mini charge ritual
+  const wbtbOverlay = document.getElementById('wbtbOverlay');
+  if (wbtbOverlay) wbtbOverlay.remove();
+  // Open the ritual but jump straight to charge phase
+  await openMildRitual();
+  if (__ritualV63State) {
+    // Skip to charge phase
+    __ritualV63State.phaseIndex = 4;  // charge
+    __ritualV63State.phase = RITUAL_PHASES_V63[4];
+    __ritualV63State.phaseStartTime = Date.now();
+    onV63PhaseChange(__ritualV63State);
+  }
+}
+
+async function dismissWBTB() {
+  const today = new Date().toISOString().split('T')[0];
+  const ritualLog = await getRitualLog(today);
+  if (ritualLog) {
+    await putRitualLog({ ...ritualLog, wbtbCompleted: true, wbtbCompletedAt: Date.now() });
+  }
+  const overlay = document.getElementById('wbtbOverlay');
+  if (overlay) {
+    overlay.style.animation = 'fadeIn 0.3s reverse forwards';
+    setTimeout(() => overlay.remove(), 300);
+  }
+  showToast('Sweet dreams. Hold the intention as you drift back.', 'moon', 'success');
+}
+
+// === Morning follow-through check (v6.3) ===
+async function showMorningCheck() {
+  // Only show if: ritual was completed last night AND no morning check yet
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const lastRitual = await getRitualLog(yesterday);
+  if (!lastRitual || !lastRitual.completedAt) return;
+  // Check if morning check already done
+  const morningCheckDone = await getSetting('morningCheck_' + yesterday, false);
+  if (morningCheckDone) return;
+  // Check if there are already dreams logged for today
+  const dreamsToday = dreamsCache.filter(d => d.date === today);
+  // Show the morning check modal
+  const overlay = document.createElement('div');
+  overlay.className = 'morning-check-modal';
+  overlay.id = 'morningCheckOverlay';
+  overlay.innerHTML = `
+    <div class="morning-check-card">
+      <div class="morning-icon"><i data-lucide="sunrise"></i></div>
+      <h2>Good morning, dreamer</h2>
+      <div class="morning-subtitle">You completed the ritual last night${lastRitual.wbtbCompleted ? ' and the WBTB' : ''}. How did it go?</div>
+      <div class="morning-question">Did you become lucid last night?</div>
+      <div class="morning-actions">
+        <button class="morning-btn morning-btn-primary" onclick="recordMorningOutcome('lucid')">
+          <i data-lucide="eye" style="width:18px;height:18px;"></i> Yes — I was lucid!
+        </button>
+        <button class="morning-btn morning-btn-secondary" onclick="recordMorningOutcome('recall')">
+          <i data-lucide="book-open" style="width:18px;height:18px;"></i> Not lucid, but I recalled dreams
+        </button>
+        <button class="morning-btn morning-btn-secondary" onclick="recordMorningOutcome('nothing')">
+          <i data-lucide="moon" style="width:18px;height:18px;"></i> I don't remember anything
+        </button>
+        <button class="morning-btn morning-btn-tertiary" onclick="recordMorningOutcome('skip')">
+          Skip for now
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons({ nodes: [overlay] });
+}
+
+async function recordMorningOutcome(outcome) {
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  await putSetting('morningCheck_' + yesterday, true);
+  await putSetting('morningOutcome_' + yesterday, outcome);
+  // Update the ritual log with outcome
+  const ritualLog = await getRitualLog(yesterday);
+  if (ritualLog) {
+    await putRitualLog({ ...ritualLog, morningOutcome: outcome });
+  }
+  // Close modal
+  const overlay = document.getElementById('morningCheckOverlay');
+  if (overlay) overlay.remove();
+  // React based on outcome
+  if (outcome === 'lucid') {
+    showToast('Lucid dream! Log it now while you remember.', 'star', 'success');
+    setTimeout(() => openDreamForm(), 800);
+  } else if (outcome === 'recall') {
+    showToast('Good recall! Log what you remember — every detail counts.', 'book-open');
+    setTimeout(() => openDreamForm(), 800);
+  } else if (outcome === 'nothing') {
+    showToast('That happens. Stay consistent — recall returns with practice.', 'moon');
+  }
+}
+
+// === Patch the close function to handle v6.3 state ===
+// (closeMildRitual is called by the X button and after completion)
+const __originalCloseMildRitual = closeMildRitual;
+closeMildRitual = function() {
+  if (__ritualV63State) {
+    // v6.3 cleanup
+    cancelAnimationFrame(__ritualV63State.rafId);
+    document.removeEventListener('mouseup', __ritualV63State._endHold);
+    document.removeEventListener('touchend', __ritualV63State._endHold);
+    document.removeEventListener('touchcancel', __ritualV63State._endHold);
+    document.removeEventListener('keydown', __ritualV63State._spaceHandler);
+    document.removeEventListener('keyup', __ritualV63State._spaceHandler);
+    window.removeEventListener('resize', __ritualV63State._resizeHandler);
+    stopRitualAudio();
+    stopRitualOrbShader();
+    stopVoiceIntention();
+    vibrateSafe(0);
+    if (window.__nebulaSetCharge) window.__nebulaSetCharge(0);
+    __ritualV63State = null;
+    const overlay = document.getElementById('ritualOverlay');
+    if (overlay) {
+      overlay.style.animation = 'fadeIn 0.3s reverse forwards';
+      setTimeout(() => overlay.remove(), 300);
+    }
+  } else {
+    __originalCloseMildRitual();
+  }
+};
+
+// =====================================================================
+// END v6.3 ENHANCED RITUAL SYSTEM
+// =====================================================================
+
 // ==================== MICRO-INTERACTIONS (v5) ====================
 function setupMagneticButtons() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -9385,11 +10923,21 @@ function setupMagneticButtons() {
 
 function setupRippleEffect() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  document.querySelectorAll('.sidebar-nav a').forEach(link => {
-    link.addEventListener('click', e => {
+  // v6.2: attach ripple to both sidebar (desktop) and bottom nav (mobile)
+  const navLinks = document.querySelectorAll('.sidebar-nav a, .bottom-nav a');
+  navLinks.forEach(link => {
+    if (link.__rippleBound) return;
+    link.__rippleBound = true;
+    // v6.2: use pointerdown for instant feedback on both mouse and touch
+    // (was click only, which fires 300ms later on legacy mobile)
+    link.addEventListener('pointerdown', e => {
+      // v6.2: haptic feedback on touch
+      if (e.pointerType === 'touch' && navigator.vibrate) {
+        try { navigator.vibrate(8); } catch(_) {}
+      }
       const rect = link.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = (e.clientX || rect.left + rect.width / 2) - rect.left;
+      const y = (e.clientY || rect.top + rect.height / 2) - rect.top;
       const ripple = document.createElement('span');
       ripple.className = 'ripple';
       const size = Math.max(rect.width, rect.height);
@@ -9398,18 +10946,25 @@ function setupRippleEffect() {
       ripple.style.top = (y - size / 2) + 'px';
       link.appendChild(ripple);
       setTimeout(() => ripple.remove(), 600);
-    });
+    }, { passive: true });
   });
 }
 
 // ==================== PERFORMANCE TUNING (v5) ====================
 function detectLowPower() {
-  // Heuristic: touch device + small screen + slow CPU indication
+  // v6.2: Tightened heuristic — only return true for GENUINELY low-power devices.
+  // The old heuristic (mobile + touch + ≤4 cores) was matching most modern phones
+  // because navigator.hardwareConcurrency typically reports 4-6 on mobile.
+  // Modern phones (iPhone 12+, Pixel 5+, Galaxy S20+) can run the full app fine.
+  // We now require BOTH a small screen AND very few cores (≤2) — i.e. only
+  // truly weak devices like old tablets or low-end Android Go phones.
   const isMobile = window.matchMedia('(max-width: 768px)').matches;
   const isTouch = window.matchMedia('(hover: none)').matches;
-  // navigator.hardwareConcurrency indicates CPU cores (low = slower device)
   const cores = navigator.hardwareConcurrency || 4;
-  return isMobile && isTouch && cores <= 4;
+  // v6.2: also check deviceMemory (Chrome only) — <2GB is genuinely low-end
+  const mem = navigator.deviceMemory || 4;
+  // Only flag low-power when ALL signals agree it's weak
+  return isMobile && isTouch && (cores <= 2 || mem <= 1);
 }
 
 // If low-power, reduce canvas intensity (already done via isMobile in init, but double-check)
@@ -9474,6 +11029,19 @@ async function init() {
     } else {
       scheduleInAppRCReminders(opt, rcSetup.frequency);
     }
+  }
+  // v6.3: Show morning follow-through check if ritual was completed last night
+  // and morning check hasn't been done yet. Wait 2s for app to settle.
+  setTimeout(() => {
+    if (typeof showMorningCheck === 'function') showMorningCheck();
+  }, 2500);
+  // v6.3: Check if a WBTB alarm was scheduled and is still pending — re-arm it
+  const wbtbScheduledFor = await getSetting('wbtbScheduledFor', 0);
+  if (wbtbScheduledFor > Date.now()) {
+    const delayMs = wbtbScheduledFor - Date.now();
+    if (__wbtbAlarmTimer) clearTimeout(__wbtbAlarmTimer);
+    __wbtbAlarmTimer = setTimeout(triggerWBTBWake, delayMs);
+    console.log(`[LucidLog v6.3] WBTB alarm re-armed for ${new Date(wbtbScheduledFor).toLocaleTimeString()}`);
   }
 }
 
