@@ -16,9 +16,26 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.169.0/build/three.module.js"
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
   }
 }
+</script>
+<!-- v6: WebGPU capability detection (progressive enhancement) -->
+<script>
+window.__webgpuSupported = (function() {
+  return typeof navigator !== 'undefined' && 'gpu' in navigator &&
+         typeof navigator.gpu !== 'undefined';
+})();
+window.__lucidRenderTier = (function() {
+  // Tiered rendering: 'webgpu' | 'webgl2' | 'webgl1' | '2d'
+  if (window.__webgpuSupported) return 'webgpu';
+  const c = document.createElement('canvas');
+  if (c.getContext('webgl2')) return 'webgl2';
+  if (c.getContext('webgl')) return 'webgl1';
+  return '2d';
+})();
+if (window.__webgpuSupported) console.log('%c[LucidLog v6] WebGPU available — using progressive enhancement over WebGL2 baseline.', 'color:#9FEAE8');
 </script>
 <!-- GSAP for timeline-based UI animations -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -313,6 +330,66 @@ ul, ol { list-style: none; }
 
 /* Moon SVG animation helpers */
 .moon-visual svg, .moon-streak-banner .moon-visual svg { overflow: visible !important; }
+
+/* ========== v6: 3D HERO MOON ========== */
+.hero-moon-3d-wrap {
+  position: relative;
+  display: inline-block;
+  filter: drop-shadow(0 0 24px rgba(159,234,232,0.35));
+}
+.hero-moon-3d-canvas {
+  display: block;
+  pointer-events: none;
+}
+.hero-moon-3d-fallback svg {
+  filter: drop-shadow(0 0 8px rgba(159,234,232,0.4));
+}
+/* When canvas fades in, dim the fallback SVG underneath */
+.hero-moon-3d-wrap:has(canvas:not([style*="opacity: 0"])) .hero-moon-3d-fallback {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+@media (max-width: 380px) {
+  .hero-moon-3d-wrap { width: 120px !important; height: 120px !important; }
+}
+
+/* ========== v6: 3D CONSTELLATION ========== */
+.constellation-container {
+  position: relative;
+  min-height: 500px;
+}
+.constellation-3d-canvas {
+  z-index: 2;
+}
+.constellation-3d-canvas:active {
+  cursor: grabbing;
+}
+@media (max-width: 768px) {
+  .constellation-container { min-height: 360px; }
+}
+
+/* ========== v6: 3D CARD TILT (subtle polish) ========== */
+#mainContent .card,
+#mainContent .dream-entry-card,
+#mainContent .rc-card,
+#mainContent .tech-card {
+  transition: transform var(--dur-fast, 180ms) var(--ease-spring-soft, cubic-bezier(0.25, 1.05, 0.5, 1)),
+              box-shadow var(--dur-fast, 180ms) var(--ease-smooth, cubic-bezier(0.4, 0.0, 0.2, 1));
+  transform-style: preserve-3d;
+}
+/* Don't tilt cards inside modals or that explicitly opt out */
+.modal .card,
+.modal .dream-entry-card,
+.card.no-tilt {
+  transform: none !important;
+}
+
+/* ========== v6: CONSTELLATION TOOLTIP ENHANCEMENT ========== */
+.constellation-tooltip {
+  pointer-events: none;
+  max-width: 260px;
+  white-space: normal;
+}
 
 
 /* ========== RC ILLUSTRATIONS (v5) ========== */
@@ -2816,7 +2893,7 @@ async function initVolumetricNebula() {
   // Hard gates: respect reduced motion, low-power devices, missing APIs
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
   if (window.__lucidLowPower) return false;
-  if (typeof THREE === 'undefined') {
+  if (typeof window.THREE === 'undefined') {
     // Three.js is loaded as ES module via importmap; import dynamically.
     try {
       const mod = await import('three');
@@ -2867,6 +2944,8 @@ async function initVolumetricNebula() {
       uniform vec2 uMouse;
       uniform float uCharge;     // 0..1 — brightens when ritual is active
       uniform float uLucidBoost; // 0..1 — brightens when user has lucid dreams
+      uniform float uBass;       // 0..1 — audio bass level (ritual drone)
+      uniform float uWebGPU;     // 1.0 if WebGPU detected (enables extra effects)
 
       // --- 3D Simplex noise (Ashima Arts, public domain) ---
       vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
@@ -2916,16 +2995,22 @@ async function initVolumetricNebula() {
         return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
       }
 
-      // FBM (Fractal Brownian Motion) — layered noise for cloud-like density
+      // FBM — 6 octaves for richer cloud detail (v6 upgrade)
       float fbm(vec3 p) {
         float v = 0.0;
         float a = 0.5;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
           v += a * snoise(p);
           p *= 2.0;
           a *= 0.5;
         }
         return v;
+      }
+
+      // Domain-warped FBM for nebula filaments (v6 upgrade)
+      float warpedFbm(vec3 p) {
+        vec3 q = vec3(fbm(p), fbm(p + vec3(5.2, 1.3, 2.7)), fbm(p + vec3(8.3, 2.8, 4.1)));
+        return fbm(p + 1.5 * q);
       }
 
       // Hash for procedural stars
@@ -2935,26 +3020,36 @@ async function initVolumetricNebula() {
         return fract(p.x * p.y);
       }
 
+      // 2D rotation
+      mat2 rot2(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+
       void main() {
         vec2 uv = vUv;
         vec2 p = (uv - 0.5) * vec2(uResolution.x / uResolution.y, 1.0);
-        // Mouse parallax (subtle)
+        // Subtle camera drift (v6) — slow cinematic pan
+        vec2 drift = vec2(sin(uTime * 0.012) * 0.04, cos(uTime * 0.009) * 0.03);
+        p += drift;
+        // Mouse parallax
         p += uMouse * 0.05;
 
         float t = uTime * 0.02;
 
-        // === NEBULA CLOUDS (3D FBM) ===
+        // === NEBULA CLOUDS (warped FBM for filaments — v6 upgrade) ===
         vec3 cloudPos = vec3(p * 1.5, t);
-        float clouds = fbm(cloudPos);
-        clouds = smoothstep(-0.2, 0.6, clouds);
+        float clouds = warpedFbm(cloudPos);
+        clouds = smoothstep(-0.2, 0.7, clouds);
 
         // Second layer — slower, deeper
-        float deepClouds = fbm(vec3(p * 0.6, t * 0.5 + 100.0));
-        deepClouds = smoothstep(0.0, 0.5, deepClouds);
+        float deepClouds = warpedFbm(vec3(p * 0.6, t * 0.5 + 100.0));
+        deepClouds = smoothstep(0.0, 0.55, deepClouds);
 
-        // === COLOR PALETTE (navy + teal + gold accents) ===
-        vec3 deepNavy = vec3(0.05, 0.10, 0.16);     // #0D1B2A
-        vec3 midNavy  = vec3(0.08, 0.13, 0.22);     // #152238
+        // Third layer — fine wisps (v6)
+        float wisps = fbm(vec3(p * 3.5, t * 0.8 + 50.0));
+        wisps = smoothstep(0.3, 0.7, wisps);
+
+        // === COLOR PALETTE (navy + teal + gold + violet accents) ===
+        vec3 deepNavy = vec3(0.04, 0.08, 0.14);     // deeper than v5 for contrast
+        vec3 midNavy  = vec3(0.07, 0.12, 0.21);
         vec3 teal     = vec3(0.62, 0.92, 0.91);     // #9FEAE8
         vec3 deepTeal = vec3(0.37, 0.74, 0.73);     // #5FBDB9
         vec3 gold     = vec3(0.96, 0.85, 0.48);     // #F5D97A
@@ -2965,45 +3060,91 @@ async function initVolumetricNebula() {
         vec3 col = mix(deepNavy, midNavy, vignette);
 
         // Apply nebula clouds (teal)
-        col = mix(col, col + teal * 0.18 * clouds, clouds * 0.7);
+        col = mix(col, col + teal * 0.22 * clouds, clouds * 0.75);
         // Deep cloud shadows
-        col = mix(col, col - deepNavy * 0.3 * deepClouds, deepClouds * 0.4);
+        col = mix(col, col - deepNavy * 0.35 * deepClouds, deepClouds * 0.45);
+        // Fine wisps (violet accents — v6)
+        col += violet * 0.08 * wisps * (1.0 - vignette);
 
         // Golden highlights where clouds are densest
         float goldMask = smoothstep(0.55, 0.85, clouds) * smoothstep(0.3, 0.6, deepClouds);
-        col += gold * 0.12 * goldMask;
+        col += gold * 0.14 * goldMask;
 
         // Violet accents (rare, on the periphery)
         float violetMask = smoothstep(0.4, 0.7, fbm(vec3(p * 2.0 + 50.0, t * 0.3)));
         col += violet * 0.08 * violetMask * (1.0 - vignette);
 
-        // Charge boost — when ritual active, brighten everything + add gold
-        col += teal * 0.15 * uCharge;
-        col += gold * 0.25 * uCharge * clouds;
+        // === GOD RAYS (volumetric light scattering — v6 upgrade) ===
+        // Virtual light source in upper-right; rays modulated by cloud gaps
+        vec2 lightPos = vec2(0.75, -0.45);
+        vec2 toLight = p - lightPos;
+        float lightDist = length(toLight);
+        float angle = atan(toLight.y, toLight.x);
+        float rays = sin(angle * 8.0 + uTime * 0.05) * 0.5 + 0.5;
+        rays *= sin(angle * 13.0 - uTime * 0.03) * 0.5 + 0.5;
+        rays = pow(rays, 3.0);
+        rays *= exp(-lightDist * 1.2) * 0.35;
+        rays *= (1.0 - clouds * 0.55);
+        col += teal * rays * (0.35 + uCharge * 0.7);
 
-        // Lucid boost — subtle, persistent for users with lucid dreams
-        col += teal * 0.05 * uLucidBoost;
+        // === AUDIO REACTIVITY (v6) ===
+        // Pulse on bass frequencies from ritual drone
+        col += teal * uBass * 0.10 * (1.0 - vignette);
+        col += gold * uBass * 0.06 * clouds;
 
-        // === STARFIELD (procedural, parallax) ===
-        // Two layers: distant (small, many) + near (larger, fewer, brighter)
-        for (int layer = 0; layer < 2; layer++) {
-          float scale = layer == 0 ? 180.0 : 80.0;
-          float brightBoost = layer == 0 ? 0.6 : 1.0;
-          vec2 starUv = uv * scale + uMouse * (layer == 0 ? 5.0 : 12.0);
+        // Charge boost — when ritual active, brighten + add gold
+        col += teal * 0.18 * uCharge;
+        col += gold * 0.30 * uCharge * clouds;
+
+        // Lucid boost — subtle, persistent
+        col += teal * 0.06 * uLucidBoost;
+
+        // === STARFIELD (procedural, parallax — 3 layers — v6 upgrade) ===
+        for (int layer = 0; layer < 3; layer++) {
+          float scale = layer == 0 ? 180.0 : (layer == 1 ? 80.0 : 40.0);
+          float brightBoost = layer == 0 ? 0.6 : (layer == 1 ? 1.0 : 1.4);
+          vec2 starUv = uv * scale + uMouse * (layer == 0 ? 5.0 : (layer == 1 ? 12.0 : 20.0));
+          starUv += drift * float(layer + 1) * 5.0;
           vec2 cell = floor(starUv);
           vec2 cellUv = fract(starUv) - 0.5;
           float starSeed = hash(cell);
-          // Only ~15% of cells have a star
+          // ~15% of cells have a star
           if (starSeed > 0.85) {
             float twinkle = 0.5 + 0.5 * sin(uTime * (1.0 + starSeed * 2.0) + starSeed * 10.0);
             float starDist = length(cellUv);
             float star = smoothstep(0.15, 0.0, starDist) * twinkle * brightBoost;
-            // Star color: mostly teal-white, occasional gold
-            vec3 starCol = starSeed > 0.97 ? gold : mix(teal, vec3(1.0), 0.4);
+            // Star color: mostly teal-white, occasional gold or violet
+            vec3 starCol = starSeed > 0.97 ? gold : (starSeed > 0.94 ? violet : mix(teal, vec3(1.0), 0.4));
             col += starCol * star * 0.8;
-            // Glow halo for bright stars
+            // Glow halo
             col += starCol * star * smoothstep(0.4, 0.0, starDist) * 0.15;
+            // Diffraction spikes for bright stars (v6)
+            if (starSeed > 0.97) {
+              float spikeH = (1.0 - smoothstep(0.0, 0.5, abs(cellUv.x))) * (1.0 - smoothstep(0.0, 0.04, abs(cellUv.y)));
+              float spikeV = (1.0 - smoothstep(0.0, 0.5, abs(cellUv.y))) * (1.0 - smoothstep(0.0, 0.04, abs(cellUv.x)));
+              col += starCol * (spikeH + spikeV) * 0.4 * twinkle;
+            }
           }
+        }
+
+        // === SHOOTING STARS (procedural, periodic — v6 upgrade) ===
+        // Spawn a shooting star every ~22 seconds
+        float st = uTime * 0.5;
+        float spawnCycle = mod(st, 22.0);
+        if (spawnCycle < 1.4) {
+          float starT = spawnCycle / 1.4;
+          vec2 starStart = vec2(-0.85, 0.55);
+          vec2 starEnd = vec2(0.35, -0.35);
+          vec2 starPos = mix(starStart, starEnd, starT);
+          vec2 starDir = normalize(starEnd - starStart);
+          vec2 toStar = p - starPos;
+          float along = dot(toStar, starDir);
+          float across = abs(toStar.x * starDir.y - toStar.y * starDir.x);
+          float trail = smoothstep(0.0, 0.5, along) * smoothstep(0.5, 0.0, along) * smoothstep(0.018, 0.0, across);
+          col += vec3(1.0, 0.96, 0.88) * trail * (1.0 - starT) * 2.2;
+          // Bright head
+          float head = smoothstep(0.04, 0.0, length(toStar));
+          col += vec3(1.0) * head * (1.0 - starT) * 1.5;
         }
 
         // Subtle film grain to prevent banding
@@ -3026,6 +3167,8 @@ async function initVolumetricNebula() {
         uMouse: { value: new THREE.Vector2(0, 0) },
         uCharge: { value: 0 },
         uLucidBoost: { value: 0 },
+        uBass: { value: 0 },         // v6: audio bass level
+        uWebGPU: { value: window.__webgpuSupported ? 1.0 : 0.0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -3084,6 +3227,10 @@ async function initVolumetricNebula() {
     };
     window.__nebulaSetLucidBoost = (v) => {
       if (__nebulaMaterial) __nebulaMaterial.uniforms.uLucidBoost.value = Math.max(0, Math.min(1, v));
+    };
+    // v6: bass audio reactivity
+    window.__nebulaSetBass = (v) => {
+      if (__nebulaMaterial) __nebulaMaterial.uniforms.uBass.value = Math.max(0, Math.min(1, v));
     };
 
     // Set initial lucid boost based on user's lucid dream count
@@ -3560,6 +3707,272 @@ function moonPhaseDetailedSVG(sz=48, isHero=false) {
 // Hero version: larger, with orbiting particles
 function moonPhaseHeroSVG(sz=120) {
   return moonPhaseDetailedSVG(sz, true);
+}
+
+// ==================== 3D HERO MOON (v6 — Three.js raymarched) ====================
+// Replaces the flat SVG moon on the dashboard with a real-time raymarched moon
+// sphere: procedural craters, terminator driven by current moon phase, atmospheric
+// glow, subsurface scattering on the lit limb, slow rotation, orbiting particles.
+// Falls back gracefully to moonPhaseHeroSVG() if WebGL/Three.js unavailable.
+const __heroMoons = []; // active moon renderers (for cleanup)
+let __heroMoonSeq = 0;
+
+function moonPhaseHero3D(sz=140) {
+  const id = 'heroMoon3D_' + (++__heroMoonSeq);
+  // Wrapper preserves layout: SVG fallback sits underneath the canvas
+  const fallback = moonPhaseHeroSVG(sz);
+  return `<div class="hero-moon-3d-wrap" style="position:relative;width:${sz}px;height:${sz}px;">
+    <div class="hero-moon-3d-fallback" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">${fallback}</div>
+    <canvas class="hero-moon-3d-canvas" id="${id}" width="${Math.round(sz*2)}" height="${Math.round(sz*2)}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity 0.8s ease;" aria-hidden="true"></canvas>
+  </div>`;
+}
+
+async function initHeroMoon3D(canvasId) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (window.__lucidLowPower) return;
+  if (typeof window.THREE === 'undefined') {
+    try { window.THREE = await import('three'); } catch (e) { return; }
+  }
+  const THREE = window.THREE;
+  if (!THREE || !THREE.WebGLRenderer) return;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  // Don't double-init
+  if (canvas.__moonInit) return;
+  canvas.__moonInit = true;
+
+  try {
+    const renderer = new THREE.WebGLRenderer({
+      canvas, antialias: true, alpha: true, premultipliedAlpha: false,
+      powerPreference: 'high-performance',
+    });
+    const size = canvas.width;  // square
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(size, size, false);
+    renderer.setClearColor(0x000000, 0);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    // Get moon phase (0..1) — used to drive terminator
+    const phase = getMoonPhase().fraction;
+
+    const fragmentShader = `
+      precision highp float;
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform float uPhase;   // 0..1 moon phase (0=new, 0.5=full, 1=new)
+
+      // 3D Simplex noise
+      vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec4 mod289(vec4 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec4 permute(vec4 x){ return mod289(((x*34.0)+1.0)*x); }
+      vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
+      float snoise(vec3 v){
+        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+        vec3 i  = floor(v + dot(v, C.yyy));
+        vec3 x0 = v - i + dot(i, C.xxx);
+        vec3 g = step(x0.yzx, x0.xyz);
+        vec3 l = 1.0 - g;
+        vec3 i1 = min(g.xyz, l.zxy);
+        vec3 i2 = max(g.xyz, l.zxy);
+        vec3 x1 = x0 - i1 + C.xxx;
+        vec3 x2 = x0 - i2 + C.yyy;
+        vec3 x3 = x0 - D.yyy;
+        i = mod289(i);
+        vec4 p = permute(permute(permute(
+                   i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                 + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                 + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+        float n_ = 0.142857142857;
+        vec3 ns = n_ * D.wyz - D.xzx;
+        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+        vec4 x_ = floor(j * ns.z);
+        vec4 y_ = floor(j - 7.0 * x_);
+        vec4 x = x_ * ns.x + ns.yyyy;
+        vec4 y = y_ * ns.x + ns.yyyy;
+        vec4 h = 1.0 - abs(x) - abs(y);
+        vec4 b0 = vec4(x.xy, y.xy);
+        vec4 b1 = vec4(x.zw, y.zw);
+        vec4 s0 = floor(b0)*2.0 + 1.0;
+        vec4 s1 = floor(b1)*2.0 + 1.0;
+        vec4 sh = -step(h, vec4(0.0));
+        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+        vec3 p0 = vec3(a0.xy, h.x);
+        vec3 p1 = vec3(a0.zw, h.y);
+        vec3 p2 = vec3(a1.xy, h.z);
+        vec3 p3 = vec3(a1.zw, h.w);
+        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+        p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+        m = m * m;
+        return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+      }
+      float fbm(vec3 p) {
+        float v = 0.0, a = 0.5;
+        for (int i = 0; i < 5; i++) { v += a * snoise(p); p *= 2.0; a *= 0.5; }
+        return v;
+      }
+      // Craters: ring-shaped SDF
+      float craters(vec3 p) {
+        float c = 0.0;
+        // Several crater centers (deterministic)
+        for (int i = 0; i < 6; i++) {
+          float fi = float(i);
+          vec3 center = normalize(vec3(
+            sin(fi * 12.13) * 0.9,
+            cos(fi * 7.71) * 0.9,
+            sin(fi * 5.37 + 1.0) * 0.9
+          ));
+          float d = dot(normalize(p), center);
+          float r = 0.18 + 0.05 * sin(fi * 3.0);
+          // Ring depression
+          c -= smoothstep(r, r - 0.04, d) * 0.04;
+          // Rim lift
+          c += smoothstep(r + 0.04, r, d) * smoothstep(r - 0.02, r, d) * 0.06;
+        }
+        return c;
+      }
+
+      void main() {
+        vec2 uv = vUv * 2.0 - 1.0;
+        vec3 ro = vec3(0.0, 0.0, 2.5);
+        vec3 rd = normalize(vec3(uv, -1.5));
+        float r = 0.72;
+
+        // Raymarch the moon sphere
+        float t = 0.0;
+        bool hit = false;
+        vec3 hitPos = vec3(0.0);
+        for (int i = 0; i < 48; i++) {
+          vec3 p = ro + rd * t;
+          float d = length(p) - r;
+          if (d < 0.001) { hit = true; hitPos = p; break; }
+          if (t > 4.0) break;
+          t += d * 0.9;
+        }
+
+        if (!hit) {
+          // Atmospheric glow around the moon (back-lit limb)
+          float dist = length(uv);
+          float glow = exp(-dist * 2.5) * 0.4;
+          // Stronger glow on the lit side
+          float litSide = mix(-1.0, 1.0, sin(uPhase * 6.28318));
+          glow *= 0.5 + 0.5 * dot(normalize(vec2(uv.x * sign(litSide), uv.y)), vec2(1.0, 0.0));
+          vec3 glowCol = vec3(0.62, 0.92, 0.91);
+          gl_FragColor = vec4(glowCol * glow, glow * 0.5);
+          return;
+        }
+
+        vec3 n = normalize(hitPos);
+        // Slow rotation around Y axis
+        float ang = uTime * 0.03;
+        mat2 rot = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+        vec3 surfaceP = vec3(rot * n.xz, n.y).xzy;
+
+        // Surface detail: FBM + craters
+        float surfaceNoise = fbm(surfaceP * 3.5);
+        float crater = craters(surfaceP);
+        float surface = surfaceNoise * 0.15 + crater;
+
+        // Lighting direction depends on moon phase
+        // Phase 0 = new moon (light from behind earth → dark)
+        // Phase 0.25 = first quarter (light from right → +x)
+        // Phase 0.5 = full moon (light toward viewer → +z)
+        // Phase 0.75 = last quarter (light from left → -x)
+        float lightAngle = uPhase * 6.28318;
+        vec3 lightDir = normalize(vec3(sin(lightAngle), 0.0, cos(lightAngle)));
+        float diff = max(0.0, dot(n, lightDir));
+
+        // Surface color: warm off-white with subtle teal tint in shadows
+        vec3 lightSurface = vec3(0.97, 0.95, 0.88);
+        vec3 darkSurface  = vec3(0.10, 0.16, 0.22);
+        vec3 surfaceCol = mix(darkSurface, lightSurface, smoothstep(0.0, 0.9, diff));
+        // Surface texture variation
+        surfaceCol *= 0.85 + 0.25 * surface;
+        // Brighten highlands (positive noise), darken maria (negative)
+        surfaceCol = mix(surfaceCol, surfaceCol * 0.7, smoothstep(0.0, 0.3, -surfaceNoise));
+
+        // Terminator soft edge
+        float terminator = smoothstep(-0.05, 0.15, diff);
+        // Subsurface scattering on the lit limb — warm glow bleeding across terminator
+        float sss = smoothstep(0.0, 0.3, diff) * (1.0 - smoothstep(0.3, 0.6, diff));
+        surfaceCol += vec3(0.20, 0.15, 0.10) * sss * 0.4;
+
+        // Fresnel rim — atmospheric scattering on the limb
+        vec3 viewDir = -rd;
+        float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 3.0);
+        // Rim glows teal on lit side, faint navy on dark side
+        vec3 rimCol = mix(vec3(0.05, 0.10, 0.16), vec3(0.62, 0.92, 0.91), diff);
+        surfaceCol += rimCol * fresnel * 0.5;
+
+        // Subtle earthshine on the dark side (faint blue glow)
+        float earthshine = (1.0 - diff) * 0.06;
+        surfaceCol += vec3(0.10, 0.18, 0.28) * earthshine;
+
+        gl_FragColor = vec4(clamp(surfaceCol, 0.0, 1.0), 1.0);
+      }
+    `;
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+      fragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uPhase: { value: phase },
+      },
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    scene.add(quad);
+
+    const clock = new THREE.Clock();
+    let rafId = null;
+    let visible = true;
+    const onVis = () => { visible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVis);
+
+    const animate = () => {
+      rafId = requestAnimationFrame(animate);
+      if (!visible) return;
+      material.uniforms.uTime.value = clock.getElapsedTime();
+      try { renderer.render(scene, camera); } catch(e) { stop(); return; }
+    };
+
+    function stop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      document.removeEventListener('visibilitychange', onVis);
+      try { renderer.dispose(); } catch(e) {}
+      material.dispose();
+      // Restore SVG fallback if canvas was visible
+      canvas.style.opacity = '0';
+    }
+
+    __heroMoons.push({ stop, canvas });
+    animate();
+
+    // Reveal canvas once first frame rendered
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        canvas.style.opacity = '1';
+      });
+    });
+  } catch (e) {
+    console.warn('Hero moon 3D init failed', e);
+  }
+}
+
+function stopAllHeroMoons() {
+  while (__heroMoons.length) {
+    const m = __heroMoons.pop();
+    try { m.stop(); } catch(e) {}
+  }
 }
 
 // Moon with crack for broken streak
@@ -4941,6 +5354,9 @@ function showAchievementModal(def) {
 // ==================== PAGE RENDERERS ====================
 async function renderPage(page) {
   const main = document.getElementById('mainContent');
+  // v6: stop any active 3D hero moons from the previous page
+  if (window.__currentConstellation3D) { window.__currentConstellation3D.stop(); window.__currentConstellation3D = null; }
+  stopAllHeroMoons();
   main.innerHTML = renderSkeleton();
   await refreshCache();
   switch(page) {
@@ -4954,13 +5370,22 @@ async function renderPage(page) {
           if (valEl && !isNaN(target)) animateCounter(valEl, target, 1000);
         });
       }, 100);
+      // v6: init 3D hero moon (async, non-blocking; falls back to SVG)
+      setTimeout(() => {
+        const moonCanvas = main.querySelector('.hero-moon-3d-canvas');
+        if (moonCanvas && moonCanvas.id) initHeroMoon3D(moonCanvas.id);
+      }, 200);
       break;
     case 'journal': main.innerHTML = renderJournal(); break;
     case 'reality-check': main.innerHTML = renderRealityCheck(); break;
     case 'library': main.innerHTML = renderLibrary(); break;
     case 'sleep': main.innerHTML = await renderSleep(); break;
     case 'sleep-tracker': main.innerHTML = await renderSleepTracker(); break;
-    case 'constellation': main.innerHTML = renderConstellation(); break;
+    case 'constellation':
+      main.innerHTML = renderConstellation();
+      // v6: upgrade to 3D constellation if Three.js available
+      setTimeout(() => initConstellation3D(), 100);
+      break;
     case 'stats': main.innerHTML = renderStats(); break;
     case 'dictionary': main.innerHTML = renderDictionary(); break;
     case 'challenges': main.innerHTML = await renderChallenges(); break;
@@ -4973,6 +5398,9 @@ async function renderPage(page) {
   const ids = dreamsCache.map(d=>d.id);
   loadImagesIntoDOM(ids, main);
   setupMagneticButtons();
+  // v6: 3D card tilt + chart enhancements
+  setup3DTilt();
+  enhanceCharts();
   // GSAP-powered staggered entrance for cards (graceful fallback if GSAP missing)
   animatePageEntrance(page);
 }
@@ -5002,6 +5430,435 @@ function animatePageEntrance(page) {
       });
     }
   } catch (e) { /* GSAP failed silently */ }
+}
+
+// ==================== 3D CARD TILT (v6) ====================
+// Mouse-driven perspective tilt on cards — subtle, premium-feeling polish.
+// Only enabled on devices with hover (skipped on touch / reduced-motion).
+function setup3DTilt() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (window.matchMedia('(hover: none)').matches) return;
+  if (window.__lucidLowPower) return;
+  const cards = document.querySelectorAll('#mainContent .card:not(.no-tilt), #mainContent .dream-entry-card, #mainContent .rc-card, #mainContent .tech-card');
+  cards.forEach(card => {
+    if (card.__tiltBound) return;
+    card.__tiltBound = true;
+    card.style.transformStyle = 'preserve-3d';
+    card.style.willChange = 'transform';
+    const maxTilt = 6; // max degrees
+    let raf = null;
+    const onMove = (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      const tiltX = (0.5 - y) * maxTilt * 2;
+      const tiltY = (x - 0.5) * maxTilt * 2;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        card.style.transform = `perspective(900px) rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg) translateZ(0)`;
+      });
+    };
+    const onLeave = () => {
+      if (raf) cancelAnimationFrame(raf);
+      card.style.transform = '';
+    };
+    card.addEventListener('mousemove', onMove, { passive: true });
+    card.addEventListener('mouseleave', onLeave);
+  });
+}
+
+// ==================== GSAP CHART ENHANCEMENTS (v6) ====================
+// Replace CSS-only chart animations with richer GSAP timelines:
+// - data-line: stroke draw-in with motion blur glow
+// - data-bar: staggered rise + scale spring
+// - data-point: pop with stagger + glow flash
+// - data-area: opacity fade-in after line draws
+// - stat-bar-fill: width grow with elastic ease
+function enhanceCharts() {
+  if (typeof gsap === 'undefined') return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  try {
+    // Lines: stroke-dashoffset draw-in
+    const lines = document.querySelectorAll('.stat-chart-svg .data-line');
+    lines.forEach(line => {
+      const len = line.getTotalLength ? line.getTotalLength() : 2000;
+      gsap.set(line, { strokeDasharray: len, strokeDashoffset: len });
+      gsap.to(line, {
+        strokeDashoffset: 0,
+        duration: 1.4,
+        ease: 'power2.out',
+        delay: 0.2,
+      });
+    });
+    // Areas: fade in (only if present)
+    const areas = document.querySelectorAll('.stat-chart-svg .data-area');
+    if (areas.length) {
+      gsap.fromTo(areas,
+        { opacity: 0 },
+        { opacity: 1, duration: 1.0, ease: 'power1.out', delay: 0.9 }
+      );
+    }
+    // Points: stagger pop with glow flash
+    const points = document.querySelectorAll('.stat-chart-svg .data-point');
+    if (points.length) {
+      gsap.from(points, {
+        scale: 0,
+        opacity: 0,
+        duration: 0.5,
+        ease: 'back.out(2)',
+        stagger: 0.06,
+        delay: 0.8,
+        transformOrigin: 'center',
+        svgOrigin: '50 50',
+        clearProps: 'opacity',
+      });
+    }
+    // NOTE: We deliberately DO NOT GSAP-animate the SVG <rect> bars (.data-bar)
+    // because GSAP's transform on SVG rects ignores CSS transform-box: fill-box,
+    // causing them to scale from the SVG origin (0,0) and become invisible.
+    // The existing CSS @keyframes barRise already handles them correctly.
+    // Same for .stat-bars .stat-bar-fill — CSS @keyframes barGrow handles them.
+
+    // REM timeline bars: staggered rise (also CSS-animated; GSAP just adds polish
+    // — but only via opacity, NOT scale, to avoid the transform-box issue)
+    const remBars = document.querySelectorAll('.rem-timeline svg .rem-bar');
+    if (remBars.length) {
+      gsap.from(remBars, {
+        opacity: 0,
+        duration: 0.5,
+        ease: 'power2.out',
+        stagger: 0.04,
+        clearProps: 'opacity',
+      });
+    }
+    // Section headings: subtle slide-up entrance
+    const sectionHeadings = document.querySelectorAll('.stat-section h2');
+    if (sectionHeadings.length) {
+      gsap.from(sectionHeadings, {
+        opacity: 0,
+        y: 8,
+        duration: 0.4,
+        ease: 'power2.out',
+        stagger: 0.08,
+        clearProps: 'opacity,transform',
+      });
+    }
+  } catch (e) { /* GSAP chart enhancement failed silently */ }
+}
+
+// ==================== 3D CONSTELLATION (v6 — Three.js) ====================
+// Replaces the flat SVG constellation with a real 3D scene:
+// - Stars are point sprites with custom shader (soft glow, twinkle, depth)
+// - Connecting lines are 3D Catmull-Rom curves with animated glow
+// - Camera rotates slightly with mouse for parallax
+// - Lucid stars have lens flare + cross flare
+// Falls back to the SVG constellation (already rendered) if init fails.
+async function initConstellation3D() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (window.__lucidLowPower) return;
+  if (typeof window.THREE === 'undefined') {
+    try { window.THREE = await import('three'); } catch (e) { return; }
+  }
+  const THREE = window.THREE;
+  if (!THREE || !THREE.WebGLRenderer) return;
+  const container = document.getElementById('constellationContainer');
+  if (!container) return;
+  // Need at least 2 dreams to render
+  if (!dreamsCache || dreamsCache.length < 2) return;
+
+  // Hide the SVG constellation, show 3D canvas instead
+  const svg = container.querySelector('.constellation-svg');
+  if (svg) svg.style.opacity = '0.15'; // keep as faint backdrop
+
+  try {
+    const W = container.clientWidth || 800;
+    const H = 500;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'constellation-3d-canvas';
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;cursor:grab;';
+    canvas.width = W * (window.devicePixelRatio || 1);
+    canvas.height = H * (window.devicePixelRatio || 1);
+    container.style.position = 'relative';
+    container.appendChild(canvas);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, premultipliedAlpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(W, H, false);
+    renderer.setClearColor(0x000000, 0);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+    camera.position.set(0, 0, 12);
+
+    // Build star data (same mapping as SVG: date → X, time → Y, word count → size)
+    const dates = dreamsCache.map(d => new Date(d.date + 'T00:00:00').getTime());
+    const minDate = Math.min(...dates), maxDate = Math.max(...dates);
+    const dateRange = maxDate - minDate || 86400000;
+    const stars3d = dreamsCache.map(d => {
+      const dateMs = new Date(d.date + 'T00:00:00').getTime();
+      const x = ((dateMs - minDate) / dateRange) * 16 - 8;
+      const timeParts = (d.time || '06:00').split(':');
+      const hour = parseInt(timeParts[0] || 6) + parseInt(timeParts[1] || 0) / 60;
+      const y = (hour / 24) * 10 - 5;
+      // v6: deeper Z spread for real 3D parallax — range -5..+5
+      const z = ((d.id || 'x').split('').reduce((s, c) => s + c.charCodeAt(0), 0) % 100) / 100 * 10 - 5;
+      const wordCount = (d.narrative || '').split(/\s+/).filter(Boolean).length;
+      const size = Math.max(10, Math.min(32, wordCount / 4));
+      return { ...d, x, y, z, size };
+    });
+
+    // === Background parallax star field (3D points) ===
+    const bgCount = 400;
+    const bgGeom = new THREE.BufferGeometry();
+    const bgPos = new Float32Array(bgCount * 3);
+    const bgSize = new Float32Array(bgCount);
+    for (let i = 0; i < bgCount; i++) {
+      bgPos[i*3]   = (Math.random() - 0.5) * 30;
+      bgPos[i*3+1] = (Math.random() - 0.5) * 20;
+      bgPos[i*3+2] = (Math.random() - 0.5) * 20 - 5;
+      bgSize[i] = 1 + Math.random() * 2;
+    }
+    bgGeom.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+    bgGeom.setAttribute('aSize', new THREE.BufferAttribute(bgSize, 1));
+
+    const bgMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
+      vertexShader: `
+        attribute float aSize;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vTwinkle;
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          float twinkle = 0.5 + 0.5 * sin(uTime * 2.0 + position.x * 10.0 + position.y * 7.0);
+          vTwinkle = twinkle;
+          gl_PointSize = aSize * uPixelRatio * (0.6 + 0.4 * twinkle) * (300.0 / -mvPosition.z);
+        }
+      `,
+      fragmentShader: `
+        varying float vTwinkle;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c);
+          if (d > 0.5) discard;
+          float alpha = (1.0 - d * 2.0) * vTwinkle * 0.6;
+          gl_FragColor = vec4(0.62, 0.92, 0.91, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+    const bgPoints = new THREE.Points(bgGeom, bgMaterial);
+    scene.add(bgPoints);
+
+    // === Dream stars (point sprites with rich glow) ===
+    const starGeom = new THREE.BufferGeometry();
+    const starPos = new Float32Array(stars3d.length * 3);
+    const starSize = new Float32Array(stars3d.length);
+    const starLucid = new Float32Array(stars3d.length);
+    const starPhase = new Float32Array(stars3d.length);
+    stars3d.forEach((s, i) => {
+      starPos[i*3] = s.x;
+      starPos[i*3+1] = s.y;
+      starPos[i*3+2] = s.z;
+      starSize[i] = s.size;
+      starLucid[i] = s.isLucid ? 1.0 : 0.0;
+      starPhase[i] = Math.random() * 6.28;
+    });
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeom.setAttribute('aSize', new THREE.BufferAttribute(starSize, 1));
+    starGeom.setAttribute('aLucid', new THREE.BufferAttribute(starLucid, 1));
+    starGeom.setAttribute('aPhase', new THREE.BufferAttribute(starPhase, 1));
+
+    const starMaterial = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
+      vertexShader: `
+        attribute float aSize;
+        attribute float aLucid;
+        attribute float aPhase;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vLucid;
+        varying float vTwinkle;
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          float twinkle = 0.6 + 0.4 * sin(uTime * 1.5 + aPhase);
+          vTwinkle = twinkle;
+          vLucid = aLucid;
+          gl_PointSize = aSize * uPixelRatio * twinkle * (300.0 / -mvPosition.z);
+        }
+      `,
+      fragmentShader: `
+        varying float vLucid;
+        varying float vTwinkle;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c);
+          if (d > 0.5) discard;
+          // Core
+          float core = 1.0 - smoothstep(0.0, 0.15, d);
+          // Glow halo
+          float halo = (1.0 - smoothstep(0.0, 0.5, d)) * 0.4;
+          // Cross flare for lucid stars
+          float flareH = (1.0 - smoothstep(0.0, 0.5, abs(c.x))) * (1.0 - smoothstep(0.0, 0.04, abs(c.y)));
+          float flareV = (1.0 - smoothstep(0.0, 0.5, abs(c.y))) * (1.0 - smoothstep(0.0, 0.04, abs(c.x)));
+          float flare = (flareH + flareV) * vLucid * vTwinkle * 0.8;
+
+          vec3 tealCol = vec3(0.72, 0.96, 0.95);
+          vec3 goldCol = vec3(1.0, 0.88, 0.55);
+          vec3 col = mix(tealCol, goldCol, vLucid);
+          float alpha = (core + halo + flare) * vTwinkle;
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const starPoints = new THREE.Points(starGeom, starMaterial);
+    scene.add(starPoints);
+
+    // === Connecting lines (Catmull-Rom through chronological stars) ===
+    const chronoStars = [...stars3d].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-12);
+    if (chronoStars.length >= 2) {
+      const curvePoints = chronoStars.map(s => new THREE.Vector3(s.x, s.y, s.z));
+      const curve = new THREE.CatmullRomCurve3(curvePoints, false, 'catmullrom', 0.3);
+      const tubeGeom = new THREE.TubeGeometry(curve, 100, 0.04, 8, false);
+      const tubeMat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec2 vUv;
+          uniform float uTime;
+          void main() {
+            // Flowing pulse along the curve
+            float pulse = 0.5 + 0.5 * sin(vUv.x * 20.0 - uTime * 2.0);
+            float alpha = 0.25 + 0.3 * pulse;
+            vec3 col = mix(vec3(0.37, 0.74, 0.73), vec3(0.72, 0.96, 0.95), pulse);
+            gl_FragColor = vec4(col, alpha);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const tube = new THREE.Mesh(tubeGeom, tubeMat);
+      scene.add(tube);
+      // Store for uniform updates
+      tube.userData.isLine = true;
+    }
+
+    // === Mouse-driven camera parallax ===
+    let mouseX = 0, mouseY = 0;
+    let targetRotX = 0, targetRotY = 0;
+    let currentRotX = 0, currentRotY = 0;
+    const onMove = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = ((e.clientX - rect.left) / rect.width) - 0.5;
+      mouseY = ((e.clientY - rect.top) / rect.height) - 0.5;
+      targetRotY = mouseX * 0.5;
+      targetRotX = -mouseY * 0.3;
+    };
+    canvas.addEventListener('mousemove', onMove, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = ((e.touches[0].clientX - rect.left) / rect.width) - 0.5;
+        mouseY = ((e.touches[0].clientY - rect.top) / rect.height) - 0.5;
+        targetRotY = mouseX * 0.5;
+        targetRotX = -mouseY * 0.3;
+      }
+    }, { passive: true });
+
+    // === Click handling — show tooltip with dream info ===
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Points.threshold = 0.5;
+    const mouse = new THREE.Vector2();
+    const tooltip = document.getElementById('constTooltip');
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObject(starPoints);
+      if (hits.length && hits[0].index !== undefined) {
+        const dream = stars3d[hits[0].index];
+        if (dream && tooltip) {
+          tooltip.style.display = 'block';
+          tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+          tooltip.style.top = (e.clientY - rect.top - 20) + 'px';
+          tooltip.innerHTML = `<div class="tip-title">${escapeHtml(dream.title)}</div>
+            <div class="tip-meta">${dream.date}${dream.time ? ' at ' + dream.time : ''} ${dream.isLucid ? '· &#9733; Lucid' : ''}</div>`;
+          setTimeout(() => { if (tooltip) tooltip.style.display = 'none'; }, 3000);
+        }
+      }
+    });
+
+    // === Resize ===
+    const onResize = () => {
+      const w = container.clientWidth || W;
+      const h = H;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+
+    // === Render loop ===
+    let rafId = null;
+    let visible = true;
+    const onVis = () => { visible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVis);
+    const clock = new THREE.Clock();
+
+    const animate = () => {
+      rafId = requestAnimationFrame(animate);
+      if (!visible) return;
+      const t = clock.getElapsedTime();
+      bgMaterial.uniforms.uTime.value = t;
+      starMaterial.uniforms.uTime.value = t;
+      scene.traverse(o => { if (o.userData.isLine && o.material.uniforms) o.material.uniforms.uTime.value = t; });
+      // Camera parallax smoothing
+      currentRotX += (targetRotX - currentRotX) * 0.05;
+      currentRotY += (targetRotY - currentRotY) * 0.05;
+      camera.position.x = Math.sin(currentRotY) * 12;
+      camera.position.z = Math.cos(currentRotY) * 12;
+      camera.position.y = currentRotX * 4;
+      camera.lookAt(0, 0, 0);
+      // Gentle auto-rotation when mouse idle
+      if (Math.abs(targetRotY) < 0.01) {
+        targetRotY = Math.sin(t * 0.05) * 0.15;
+      }
+      try { renderer.render(scene, camera); } catch(e) { stop(); }
+    };
+
+    function stop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('resize', onResize);
+      canvas.removeEventListener('mousemove', onMove);
+      try { renderer.dispose(); } catch(e) {}
+      try { bgGeom.dispose(); starGeom.dispose(); bgMaterial.dispose(); starMaterial.dispose(); } catch(e) {}
+      if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+      if (svg) svg.style.opacity = '1'; // restore SVG
+      if (tooltip) tooltip.style.display = 'none';
+    }
+
+    window.__currentConstellation3D = { stop };
+    animate();
+  } catch (e) {
+    console.warn('3D constellation init failed', e);
+    if (svg) svg.style.opacity = '1';
+  }
 }
 
 // GSAP-powered modal entrance (replaces CSS animation for richer effect)
@@ -5060,7 +5917,7 @@ function renderDashboard() {
   const streakActive = streak > 0;
   const moonSvg = streakActive ? moonPhaseSVG(56) : moonPhaseCrackedSVG(56);
 
-  const heroMoon = moonPhaseHeroSVG(140);
+  const heroMoon = moonPhaseHero3D(140);  // v6: 3D raymarched moon (falls back to SVG)
   const awarenessScore = getRCAwarenessScore();
   return `<div class="page">
     <div class="hero-section">
@@ -7610,6 +8467,7 @@ let __ritualAudioCtx = null;
 let __ritualDroneOsc = null;
 let __ritualDroneGain = null;
 let __ritualDroneOsc2 = null; // second osc for richer timbre
+let __bassRAF = null; // v6: bass analysis RAF handle
 
 function startRitualAudio() {
   try {
@@ -7664,6 +8522,26 @@ function startRitualAudio() {
     __ritualDroneGain.connect(__ritualAudioCtx.destination);
     __ritualDroneOsc.start();
     __ritualDroneOsc2.start();
+
+    // v6: feed bass level to nebula background shader
+    if (window.__nebulaSetBass && !__bassRAF) {
+      const tickBass = () => {
+        if (!__ritualAudioCtx) { __bassRAF = null; return; }
+        __bassRAF = requestAnimationFrame(tickBass);
+        try {
+          if (__orbAudioAnalyser && __orbAudioAnalyser._analyser) {
+            const data = __orbAudioAnalyser._data;
+            __orbAudioAnalyser._analyser.getByteFrequencyData(data);
+            // Use first 8 bins (low frequencies)
+            let sum = 0;
+            for (let i = 0; i < 8; i++) sum += data[i];
+            const bass = (sum / 8) / 255;
+            window.__nebulaSetBass(bass);
+          }
+        } catch(e) {}
+      };
+      __bassRAF = requestAnimationFrame(tickBass);
+    }
   } catch(e) { console.warn('Ritual audio failed', e); }
 }
 
@@ -7689,6 +8567,9 @@ function stopRitualAudio() {
       __ritualDroneOsc2 = null;
     } catch(e) {}
   }, 600);
+  // v6: stop bass analysis + reset nebula bass
+  if (__bassRAF) { cancelAnimationFrame(__bassRAF); __bassRAF = null; }
+  if (window.__nebulaSetBass) window.__nebulaSetBass(0);
 }
 
 // Open the ritual overlay
@@ -7870,7 +8751,7 @@ async function initRitualOrbShader() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   if (window.__lucidLowPower) return;
   // Ensure THREE is available (shared with nebula)
-  if (typeof THREE === 'undefined') {
+  if (typeof window.THREE === 'undefined') {
     try { window.THREE = await import('three'); } catch (e) { return; }
   }
   const THREE = window.THREE;
@@ -7900,7 +8781,7 @@ async function initRitualOrbShader() {
     `;
 
     // Raymarched SDF sphere with FBM noise displacement.
-    // The sphere morphs based on charge (0..1) and audio level (0..1).
+    // v6 upgrade: subsurface scattering, iridescence, inner caustics, bloom-like halo.
     const fragmentShader = `
       precision highp float;
       varying vec2 vUv;
@@ -7963,11 +8844,17 @@ async function initRitualOrbShader() {
         return v;
       }
 
-      // SDF of a sphere with noise displacement
+      // v6: iridescence lookup — cosine palette
+      vec3 iridescence(float t) {
+        return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
+      }
+
+      // SDF of a sphere with noise displacement — v6: more dramatic at high charge
       float sdSphere(vec3 p, float r) {
-        // Displacement scales with charge + audio
-        float disp = fbm(p * 2.0 + uTime * 0.1) * (0.08 + uCharge * 0.25 + uAudio * 0.15);
-        return length(p) - r + disp;
+        // Two-octave displacement for richer surface
+        float disp1 = fbm(p * 2.0 + uTime * 0.1) * (0.08 + uCharge * 0.30 + uAudio * 0.18);
+        float disp2 = fbm(p * 5.0 - uTime * 0.15) * (0.04 + uCharge * 0.15);
+        return length(p) - r + disp1 + disp2 * uCharge;
       }
 
       vec3 calcNormal(vec3 p, float r) {
@@ -7990,29 +8877,39 @@ async function initRitualOrbShader() {
         float r = 0.7;
         bool hit = false;
         vec3 hitPos = vec3(0.0);
-        for (int i = 0; i < 48; i++) {
+        for (int i = 0; i < 64; i++) {  // v6: 64 steps (was 48) for more detail
           vec3 p = ro + rd * t;
           float d = sdSphere(p, r);
           if (d < 0.001) { hit = true; hitPos = p; break; }
           if (t > 4.0) break;
-          t += d * 0.9;
+          t += d * 0.85;
         }
 
         // Background fade (transparent so CSS shows through)
         if (!hit) {
-          // Soft glow around the orb
-          float glow = exp(-length(uv) * 1.5) * (0.15 + uCharge * 0.4);
+          // v6: layered glow halo — soft outer + bright inner ring
+          float dist = length(uv);
+          float glowOuter = exp(-dist * 1.5) * (0.15 + uCharge * 0.45);
+          float glowInner = exp(-dist * 4.0) * (0.20 + uCharge * 0.50);
           vec3 glowCol = mix(vec3(0.62, 0.92, 0.91), vec3(0.96, 0.85, 0.48), uCharge);
-          gl_FragColor = vec4(glowCol * glow, glow * 0.6);
+          // Add subtle iridescence to outer halo at high charge
+          float irid = iridescence(uCharge + uTime * 0.05).x;
+          glowCol = mix(glowCol, glowCol * vec3(1.1, 0.9, 1.2), uCharge * irid * 0.3);
+          float totalGlow = glowOuter + glowInner;
+          gl_FragColor = vec4(glowCol * totalGlow, totalGlow * 0.7);
           return;
         }
 
         vec3 n = calcNormal(hitPos, r);
+        vec3 viewDir = -rd;
 
         // Lighting
         vec3 lightDir = normalize(vec3(0.5, 0.7, 1.0));
+        vec3 lightDir2 = normalize(vec3(-0.6, -0.2, 0.5));  // v6: rim fill light
         float diff = max(0.0, dot(n, lightDir));
-        float fresnel = pow(1.0 - max(0.0, dot(n, -rd)), 2.5);
+        float diff2 = max(0.0, dot(n, lightDir2)) * 0.4;
+        float fresnel = pow(1.0 - max(0.0, dot(n, viewDir)), 2.5);
+        float backLight = max(0.0, dot(n, -lightDir));  // v6: for SSS
 
         // Color: teal at low charge, shifting to gold at high charge
         vec3 teal = vec3(0.62, 0.92, 0.91);
@@ -8020,16 +8917,35 @@ async function initRitualOrbShader() {
         vec3 gold = vec3(0.96, 0.85, 0.48);
         vec3 navy = vec3(0.05, 0.10, 0.16);
 
-        vec3 baseCol = mix(deepTeal, teal, diff);
+        vec3 baseCol = mix(deepTeal, teal, diff + diff2);
         baseCol = mix(baseCol, gold, uCharge * 0.7);
+
+        // v6: Subsurface scattering — light bleeds through the sphere
+        // where the back is lit (translucency on thin edges)
+        float sss = pow(backLight, 2.0) * (1.0 - max(0.0, dot(n, viewDir)));
+        vec3 sssCol = mix(teal * 0.8, gold, uCharge);
+        baseCol += sssCol * sss * (0.4 + uCharge * 0.6) * (0.3 + uAudio * 0.7);
+
+        // v6: Inner caustics — animated light pattern at the core
+        float caustics = fbm(hitPos * 8.0 + uTime * 0.3) * 0.5 + 0.5;
+        caustics = pow(caustics, 3.0);
+        baseCol += mix(teal, gold, uCharge) * caustics * 0.15 * (0.3 + uCharge * 0.7);
+
         // Fresnel rim
         baseCol += mix(teal, gold, uCharge) * fresnel * (0.6 + uCharge * 0.4);
-        // Inner glow when holding
-        baseCol += teal * uHolding * 0.15 * (1.0 - fresnel);
-        // Audio reactivity — pulses brightness
-        baseCol *= 1.0 + uAudio * 0.3;
 
-        // Subsurface scatter tint
+        // v6: Iridescent rim at high charge
+        vec3 irid = iridescence(fresnel * 2.0 + uTime * 0.1 + uCharge);
+        baseCol += irid * fresnel * uCharge * 0.5;
+
+        // Inner glow when holding
+        baseCol += teal * uHolding * 0.20 * (1.0 - fresnel);
+        // Audio reactivity — pulses brightness
+        baseCol *= 1.0 + uAudio * 0.4;
+        // Audio-driven rim flash
+        baseCol += gold * uAudio * fresnel * 0.3;
+
+        // Subsurface scatter tint (preserved from v5)
         baseCol += navy * 0.1 * (1.0 - diff);
 
         // Alpha — fully opaque where hit, soft edge
